@@ -22,6 +22,9 @@ namespace K4ryuuCS2GOTVDiscord
 		[JsonPropertyName("discord-webhook-avatar")]
 		public string DiscordWebhookAvatar { get; set; } = "";
 
+		[JsonPropertyName("discord-webhook-upload-file")]
+		public bool DiscordWebhookUploadFile { get; set; } = true;
+
 		[JsonPropertyName("discord-webhook-name")]
 		public string DiscordWebhookName { get; set; } = "CSGO Demo Bot";
 
@@ -199,7 +202,10 @@ namespace K4ryuuCS2GOTVDiscord
 						using (var content = new MultipartFormDataContent())
 						{
 							content.Add(new StringContent(JsonSerializer.Serialize(webhookData), Encoding.UTF8, "application/json"), "payload_json");
-							content.Add(new ByteArrayContent(File.ReadAllBytes(zipPath)), "file", $"{fileName}.zip");
+							if (Config.DiscordWebhookUploadFile)
+							{
+								content.Add(new ByteArrayContent(File.ReadAllBytes(zipPath)), "file", $"{fileName}.zip");
+							}
 
 							var response = await httpClient.PostAsync(Config.DiscordWebhookURL, content);
 							response.EnsureSuccessStatusCode();
