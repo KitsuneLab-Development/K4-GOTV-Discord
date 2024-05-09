@@ -12,8 +12,7 @@
 <div align="center">
   <h1 align="center">KitsuneLab©</h1>
   <h3 align="center">CS2 GOTV Discord</h3>
-  <a align="center">Sends a Discord message with the GOTV recording upon the recording has been stopped.</a>
-
+  <a align="center">Automatically handles GOTV recording, able to crop demos for every round separately. Sends the recorded demo as zipped to Discord Webhook as attachment or upload to Mega and send the url. Customizable webhook, avatar, bot name, embed and more. Automatically stop recording on idle and additionaly it can be set to be used in request mode, so it records all round separately but upload only those rounds that has been requested by users with !demo.</a>
   <p align="center">
     <br />
     <a href="https://github.com/K4ryuu/CS2-GOTV-Discord/releases">Download</a>
