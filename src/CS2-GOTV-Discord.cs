@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using CG.Web.MegaApiClient;
 
 namespace K4ryuuCS2GOTVDiscord
 {
@@ -28,7 +29,7 @@ namespace K4ryuuCS2GOTVDiscord
 		public string DiscordEmbedTitle { get; set; } = "New CSGO Demo Available";
 
 		[JsonPropertyName("discord-embed-description")]
-		public string DiscordEmbedDescription { get; set; } = "Match demo details:\nMap: {map}\nRecording Date: {date}\nRecording Time: {time}\nRecording Timedate: {timedate}\nDemo Length: {length}\nRound: {round}";
+		public string DiscordEmbedDescription { get; set; } = "Match demo details:\nMap: {map}\nRecording Date: {date}\nRecording Time: {time}\nRecording Timedate: {timedate}\nDemo Length: {length}\nRound: {round}\nMega URL: {mega_link}";
 
 		[JsonPropertyName("discord-embed-color")]
 		public int DiscordEmbedColor { get; set; } = 3447003;
@@ -45,8 +46,20 @@ namespace K4ryuuCS2GOTVDiscord
 		[JsonPropertyName("log-uploads")]
 		public bool LogUploads { get; set; } = true;
 
+		[JsonPropertyName("auto-record")]
+		public bool AutoRecord { get; set; } = false;
+
+		[JsonPropertyName("auto-record-crop-rounds")]
+		public bool AutoRecordCropRounds { get; set; } = false;
+
+		[JsonPropertyName("mega-email")]
+		public string MegaEmail { get; set; } = "";
+
+		[JsonPropertyName("mega-password")]
+		public string MegaPassword { get; set; } = "";
+
 		[JsonPropertyName("ConfigVersion")]
-		public override int Version { get; set; } = 1;
+		public override int Version { get; set; } = 2;
 	}
 
 	[MinimumApiVersion(227)]
@@ -56,7 +69,7 @@ namespace K4ryuuCS2GOTVDiscord
 		private bool IsPluginExecution = false;
 
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.0.0";
+		public override string ModuleVersion => "1.1.0";
 		public override string ModuleAuthor => "K4ryuu";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
@@ -68,9 +81,32 @@ namespace K4ryuuCS2GOTVDiscord
 			AddCommandListener("tv_record", CommandListener_Record);
 			AddCommandListener("tv_stoprecord", CommandListener_StopRecord);
 
-			RegisterEventHandler<EventCsWinPanelMatch>((@event, info) =>
+			RegisterListener<Listeners.OnMapStart>((mapName) =>
+			{
+				AddTimer(1.0f, () =>
+				{
+					if (Config.AutoRecord)
+						Server.ExecuteCommand("tv_record");
+				});
+			});
+
+			RegisterListener<Listeners.OnMapEnd>(() =>
 			{
 				Server.ExecuteCommand("tv_stoprecord");
+			});
+
+			RegisterEventHandler((EventRoundStart @event, GameEventInfo info) =>
+			{
+				if (Config.AutoRecord && Config.AutoRecordCropRounds)
+				{
+					Server.ExecuteCommand("tv_stoprecord");
+
+					Server.NextWorldUpdate(() =>
+					{
+						Server.ExecuteCommand("tv_record");
+					});
+				}
+
 				return HookResult.Continue;
 			});
 
@@ -84,7 +120,8 @@ namespace K4ryuuCS2GOTVDiscord
 				IsPluginExecution = true;
 
 				DemoStartTime = Server.EngineTime;
-				fileName = $"demo-{DemoStartTime}";
+				fileName = Config.AutoRecord && Config.AutoRecordCropRounds ? $"demo-{DemoStartTime}-{Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules?.TotalRoundsPlayed + 1}" : $"demo-{DemoStartTime}";
+
 				Server.ExecuteCommand($"tv_record \"discord_demos/{fileName}.dem\"");
 			}
 			else
@@ -108,14 +145,9 @@ namespace K4ryuuCS2GOTVDiscord
 					{ "time", DateTime.Now.ToString("HH:mm:ss") },
 					{ "timedate", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") },
 					{ "length", $"{demoLength.Minutes:00}:{demoLength.Seconds:00}" },
-					{ "round", (Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules?.TotalRoundsPlayed + 1)?.ToString() ?? "Unknown" }
+					{ "round", (Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules?.TotalRoundsPlayed + 1)?.ToString() ?? "Unknown" },
+					{ "mega_link", "Not uploaded to mega." },
 				};
-
-				var description = Config.DiscordEmbedDescription;
-				foreach (var placeholder in placeholderValues)
-				{
-					description = description.Replace($"{{{placeholder.Key}}}", placeholder.Value);
-				}
 
 				Task.Run(async () =>
 				{
@@ -127,6 +159,24 @@ namespace K4ryuuCS2GOTVDiscord
 						using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
 						{
 							archive.CreateEntryFromFile(demoPath, Path.GetFileName(demoPath), CompressionLevel.Optimal);
+						}
+
+						if (!string.IsNullOrEmpty(Config.MegaEmail) && !string.IsNullOrEmpty(Config.MegaPassword))
+						{
+							var client = new MegaApiClient();
+							client.Login(Config.MegaEmail, Config.MegaPassword);
+
+							var rootNode = client.GetNodes().Single(x => x.Type == NodeType.Root);
+							var uploadedNode = await client.UploadFileAsync(zipPath, rootNode);
+							var downloadLink = client.GetDownloadLink(uploadedNode).ToString();
+
+							placeholderValues["mega_link"] = downloadLink;
+						}
+
+						var description = Config.DiscordEmbedDescription;
+						foreach (var placeholder in placeholderValues)
+						{
+							description = description.Replace($"{{{placeholder.Key}}}", placeholder.Value);
 						}
 
 						var webhookData = new
@@ -181,6 +231,12 @@ namespace K4ryuuCS2GOTVDiscord
 		{
 			if (config.Version < Config.Version)
 				base.Logger.LogWarning("Configuration version mismatch (Expected: {0} | Current: {1})", this.Config.Version, config.Version);
+
+			if (config.AutoRecordCropRounds && !config.AutoRecord)
+				base.Logger.LogWarning("AutoRecordCropRounds is enabled but AutoRecord is disabled. AutoRecordCropRounds will not work without AutoRecord enabled.");
+
+			if (string.IsNullOrEmpty(config.DiscordWebhookURL))
+				base.Logger.LogWarning("DiscordWebhookURL is not set. Plugin will not function without a valid webhook URL.");
 
 			this.Config = config;
 		}

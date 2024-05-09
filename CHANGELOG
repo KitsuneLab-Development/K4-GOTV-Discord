@@ -1,0 +1,6 @@
+-- 2024.05.09 - v1.1.0
+
+- feat: Auto record start with new settings
+- feat: Automatically crop recording every round and upload per round
+- feat: Mega upload with {mega_link} variable
+- feat: Configuration problem checks on startup
