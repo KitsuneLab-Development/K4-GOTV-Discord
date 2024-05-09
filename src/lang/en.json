@@ -1,0 +1,5 @@
+{
+  "k4.general.prefix": "{silver}[ {lime}K4-Demo {silver}]",
+  "k4.chat.demo.request.all": "{lime}{0} {silver}has requested the demo to be uploaded at the end of the round",
+  "k4.chat.demo.request.self": "{silver}You have requested the demo to be uploaded at the end of the round"
+}

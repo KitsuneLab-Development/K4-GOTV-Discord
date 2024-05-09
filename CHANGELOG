@@ -1,3 +1,14 @@
+-- 2024.05.10 - v1.2.0
+
+- feat: Added request mode with !demo to only upload demo files if it was requested in the round (added with delete unused settings)
+- feat: Added option to name the recording file
+- feat: Added option to disable timedate in fileName
+- feat: Added option to automatically stop the recording if players leave the server
+- upgrade: Instead of filename now formatted datetime used
+- upgrade: Organized the config settings
+- fix: Added some missing validations
+- fix: Upload error handler not shows the error message
+
 -- 2024.05.09 - v1.1.0
 
 - feat: Auto record start with new settings
