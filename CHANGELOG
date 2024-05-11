@@ -1,3 +1,10 @@
+-- 2024.05.11 - v1.2.4
+
+- feat: Automatically detect the permission problem and suggest to enable the fix
+- fix: The directories not read/set properly if the fix is enabled
+- fix: Not to generate directory of demos if the fix is enabled
+- Finally ended the suffer of Slynx
+
 -- 2024.05.11 - v1.2.3
 
 - feat: Added file-open-problem-fix setting to fix the problem if you dont have access for directories other than game root
