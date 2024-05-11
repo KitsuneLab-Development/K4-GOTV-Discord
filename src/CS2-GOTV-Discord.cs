@@ -123,7 +123,7 @@ namespace K4ryuuCS2GOTVDiscord
 	public class CS2GOTVDiscordPlugin : BasePlugin, IPluginConfig<PluginConfig>
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.2.4";
+		public override string ModuleVersion => "1.2.5";
 		public override string ModuleAuthor => "K4ryuu";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
@@ -247,10 +247,7 @@ namespace K4ryuuCS2GOTVDiscord
 				if (Config.General.UseTimestampedFilename || fileExists)
 					fileName = $"{fileName}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
 
-				if (!Config.General.FileOpenProblemFix)
-					fileName = $"discord_demos/{fileName}";
-
-				Server.ExecuteCommand($"tv_record \"{(!fileName.EndsWith(".dem") ? fileName : $"{fileName}.dem")}\"");
+				Server.ExecuteCommand($"tv_record \"{(Config.General.FileOpenProblemFix ? "" : "discord_demos/")}{(fileName.EndsWith(".dem") ? fileName : $"{fileName}.dem")}\"");
 				return HookResult.Stop;
 			}
 			else

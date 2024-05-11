@@ -1,3 +1,7 @@
+-- 2024.05.11 - v1.2.5
+
+- fix: Directory targeting problems by filename
+
 -- 2024.05.11 - v1.2.4
 
 - feat: Automatically detect the permission problem and suggest to enable the fix
