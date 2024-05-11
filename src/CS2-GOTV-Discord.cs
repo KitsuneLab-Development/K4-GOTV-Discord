@@ -242,7 +242,10 @@ namespace K4ryuuCS2GOTVDiscord
 				if (Config.General.UseTimestampedFilename || File.Exists(Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem")))
 					fileName = $"{fileName}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
 
-				Server.ExecuteCommand($"tv_record \"discord_demos/{fileName}.dem\"");
+				if (!fileName.EndsWith(".dem"))
+					fileName = $"{fileName}.dem";
+
+				Server.ExecuteCommand($"tv_record \"discord_demos/{fileName}\"");
 				return HookResult.Stop;
 			}
 			else
