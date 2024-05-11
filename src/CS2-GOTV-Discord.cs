@@ -29,7 +29,7 @@ namespace K4ryuuCS2GOTVDiscord
 		public DemoRequestSettings DemoRequest { get; set; } = new DemoRequestSettings();
 
 		[JsonPropertyName("ConfigVersion")]
-		public override int Version { get; set; } = 5;
+		public override int Version { get; set; } = 6;
 
 		public class GeneralSettings
 		{
@@ -47,6 +47,9 @@ namespace K4ryuuCS2GOTVDiscord
 
 			[JsonPropertyName("use-timestamped-filename")]
 			public bool UseTimestampedFilename { get; set; } = true;
+
+			[JsonPropertyName("file-open-problem-fix")]
+			public bool FileOpenProblemFix { get; set; } = false;
 		}
 
 		public class DiscordSettings
@@ -120,7 +123,7 @@ namespace K4ryuuCS2GOTVDiscord
 	public class CS2GOTVDiscordPlugin : BasePlugin, IPluginConfig<PluginConfig>
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.2.2";
+		public override string ModuleVersion => "1.2.3";
 		public override string ModuleAuthor => "K4ryuu";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
@@ -245,7 +248,10 @@ namespace K4ryuuCS2GOTVDiscord
 				if (!fileName.EndsWith(".dem"))
 					fileName = $"{fileName}.dem";
 
-				Server.ExecuteCommand($"tv_record \"discord_demos/{fileName}\"");
+				if (!Config.General.FileOpenProblemFix)
+					fileName = $"discord_demos/{fileName}";
+
+				Server.ExecuteCommand($"tv_record \"{fileName}\"");
 				return HookResult.Stop;
 			}
 			else

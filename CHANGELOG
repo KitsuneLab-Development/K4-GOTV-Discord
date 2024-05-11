@@ -1,3 +1,8 @@
+-- 2024.05.11 - v1.2.3
+
+- feat: Added file-open-problem-fix setting to fix the problem if you dont have access for directories other than game root
+- fix: Not to use .dem twice (for matchzy and other plugin compatibility)
+
 -- 2024.05.11 - v1.2.2
 
 - fix: Override the basic changelevel and map function to prevent crashes with GOTV running
