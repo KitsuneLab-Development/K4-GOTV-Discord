@@ -1,3 +1,8 @@
+-- 2024.05.11 - v1.2.2
+
+- fix: Override the basic changelevel and map function to prevent crashes with GOTV running
+- fix: Map change crashes (that is not from the game itself), with an upload delayer for map changes
+
 -- 2024.05.11 - v1.2.1
 
 - feat: On plugin unload the recording will be stopped to process properly

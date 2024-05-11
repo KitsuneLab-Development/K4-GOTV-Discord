@@ -120,7 +120,7 @@ namespace K4ryuuCS2GOTVDiscord
 	public class CS2GOTVDiscordPlugin : BasePlugin, IPluginConfig<PluginConfig>
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.2.1";
+		public override string ModuleVersion => "1.2.2";
 		public override string ModuleAuthor => "K4ryuu";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
@@ -129,12 +129,15 @@ namespace K4ryuuCS2GOTVDiscord
 		public bool DemoRequestedThisRound = false;
 		public CounterStrikeSharp.API.Modules.Timers.Timer? reservedTimer = null;
 		public double DemoStartTime = 0.0;
+		public List<string> DelayedUploads = new List<string>();
 		public bool IsPluginExecution = false;
 
 		public override void Load(bool hotReload)
 		{
 			AddCommandListener("tv_record", CommandListener_Record);
 			AddCommandListener("tv_stoprecord", CommandListener_StopRecord);
+			AddCommandListener("changelevel", CommandListener_Changelevel);
+			AddCommandListener("map", CommandListener_Changelevel);
 
 			RegisterEventHandler((EventCsWinPanelMatch @event, GameEventInfo info) =>
 			{
@@ -142,8 +145,26 @@ namespace K4ryuuCS2GOTVDiscord
 				return HookResult.Continue;
 			});
 
+			RegisterListener<Listeners.OnMapEnd>(() =>
+			{
+				if (!string.IsNullOrEmpty(fileName) && DemoStartTime != 0.0)
+				{
+					DelayedUploads.Add(fileName);
+					Server.ExecuteCommand("tv_stoprecord");
+				}
+			});
+
 			RegisterEventHandler((EventRoundStart @event, GameEventInfo info) =>
 			{
+				if (DelayedUploads.Count > 0)
+				{
+					foreach (string fileName in DelayedUploads)
+					{
+						string demoPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem");
+						ProcessUpload(fileName, demoPath);
+					}
+				}
+
 				if (Config.AutoRecord.Enabled && Config.AutoRecord.CropRounds)
 				{
 					if (DemoStartTime != 0.0)
@@ -192,6 +213,18 @@ namespace K4ryuuCS2GOTVDiscord
 			Server.ExecuteCommand("tv_stoprecord");
 		}
 
+		private HookResult CommandListener_Changelevel(CCSPlayerController? player, CommandInfo info)
+		{
+			if (!string.IsNullOrEmpty(fileName) && DemoStartTime != 0.0)
+			{
+				DelayedUploads.Add(fileName);
+				Server.ExecuteCommand("tv_stoprecord");
+				Server.ExecuteCommand($"changelevel \"{info.ArgString.Trim().Replace("\"", "").ToLower()}\"");
+				return HookResult.Stop;
+			}
+			return HookResult.Continue;
+		}
+
 		private HookResult CommandListener_Record(CCSPlayerController? player, CommandInfo info)
 		{
 			if (!IsPluginExecution)
@@ -221,6 +254,12 @@ namespace K4ryuuCS2GOTVDiscord
 
 		private HookResult CommandListener_StopRecord(CCSPlayerController? player, CommandInfo info)
 		{
+			if (!string.IsNullOrEmpty(fileName) && DelayedUploads.Contains(fileName))
+			{
+				ResetVariables();
+				return HookResult.Continue;
+			}
+
 			string demoPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem");
 
 			if (Config.DemoRequest.Enabled && !DemoRequestedThisRound)
@@ -240,12 +279,21 @@ namespace K4ryuuCS2GOTVDiscord
 				return HookResult.Continue;
 			}
 
-			if (DemoStartTime != 0.0 && (Server.EngineTime - DemoStartTime) > Config.General.MinimumDemoDuration)
+			if (DemoStartTime != 0.0 && (Server.EngineTime - DemoStartTime) > Config.General.MinimumDemoDuration && !string.IsNullOrEmpty(fileName))
 			{
-				string zipPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.zip");
+				ProcessUpload(fileName, demoPath);
+			}
 
-				var demoLength = TimeSpan.FromSeconds(Server.EngineTime - DemoStartTime);
-				var placeholderValues = new Dictionary<string, string>
+			ResetVariables();
+			return HookResult.Continue;
+		}
+
+		public void ProcessUpload(string fileName, string demoPath)
+		{
+			string zipPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.zip");
+
+			var demoLength = TimeSpan.FromSeconds(Server.EngineTime - DemoStartTime);
+			var placeholderValues = new Dictionary<string, string>
 				{
 					{ "map", Server.MapName },
 					{ "date", DateTime.Now.ToString("yyyy-MM-dd") },
@@ -256,86 +304,82 @@ namespace K4ryuuCS2GOTVDiscord
 					{ "mega_link", "Not uploaded to mega." },
 				};
 
-				Task.Run(async () =>
+			Task.Run(async () =>
+			{
+				try
 				{
-					try
+					while (IsFileLocked(demoPath))
+						Thread.Sleep(1000);
+
+					using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
 					{
-						while (IsFileLocked(demoPath))
-							Thread.Sleep(1000);
-
-						using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
-						{
-							archive.CreateEntryFromFile(demoPath, Path.GetFileName(demoPath), CompressionLevel.Optimal);
-						}
-
-						if (!string.IsNullOrEmpty(Config.Mega.Email) && !string.IsNullOrEmpty(Config.Mega.Password))
-						{
-							var client = new MegaApiClient();
-							client.Login(Config.Mega.Email, Config.Mega.Password);
-
-							var rootNode = client.GetNodes().Single(x => x.Type == NodeType.Root);
-							var uploadedNode = await client.UploadFileAsync(zipPath, rootNode);
-							var downloadLink = client.GetDownloadLink(uploadedNode).ToString();
-
-							placeholderValues["mega_link"] = downloadLink;
-						}
-
-						var description = Config.Discord.EmbedDescription;
-						foreach (var placeholder in placeholderValues)
-						{
-							description = description.Replace($"{{{placeholder.Key}}}", placeholder.Value);
-						}
-
-						var webhookData = new
-						{
-							username = Config.Discord.WebhookName,
-							avatar_url = Config.Discord.WebhookAvatar,
-							content = Config.Discord.MessageText,
-							embeds = new[]
-							{
-								new
-								{
-									title = Config.Discord.EmbedTitle,
-									description,
-									color = Config.Discord.EmbedColor
-								}
-							}
-						};
-
-						using (var httpClient = new HttpClient())
-						using (var content = new MultipartFormDataContent())
-						{
-							content.Add(new StringContent(JsonSerializer.Serialize(webhookData), Encoding.UTF8, "application/json"), "payload_json");
-							if (Config.Discord.WebhookUploadFile)
-							{
-								content.Add(new ByteArrayContent(File.ReadAllBytes(zipPath)), "file", $"{fileName}.zip");
-							}
-
-							var response = await httpClient.PostAsync(Config.Discord.WebhookURL, content);
-							response.EnsureSuccessStatusCode();
-
-							Server.NextWorldUpdate(() =>
-							{
-								if (Config.General.LogUploads)
-									base.Logger.LogInformation($"Demo uploaded successfully: {fileName}");
-
-								if (Config.General.DeleteDemoAfterUpload)
-									File.Delete(demoPath);
-
-								if (Config.General.DeleteZippedDemoAfterUpload)
-									File.Delete(zipPath);
-							});
-						}
+						archive.CreateEntryFromFile(demoPath, Path.GetFileName(demoPath), CompressionLevel.Optimal);
 					}
-					catch (Exception ex)
+
+					if (!string.IsNullOrEmpty(Config.Mega.Email) && !string.IsNullOrEmpty(Config.Mega.Password))
 					{
-						Server.NextWorldUpdate(() => base.Logger.LogError($"Error processing demo: {ex.Message}"));
-					}
-				});
-			}
+						var client = new MegaApiClient();
+						client.Login(Config.Mega.Email, Config.Mega.Password);
 
-			ResetVariables();
-			return HookResult.Continue;
+						var rootNode = client.GetNodes().Single(x => x.Type == NodeType.Root);
+						var uploadedNode = await client.UploadFileAsync(zipPath, rootNode);
+						var downloadLink = client.GetDownloadLink(uploadedNode).ToString();
+
+						placeholderValues["mega_link"] = downloadLink;
+					}
+
+					var description = Config.Discord.EmbedDescription;
+					foreach (var placeholder in placeholderValues)
+					{
+						description = description.Replace($"{{{placeholder.Key}}}", placeholder.Value);
+					}
+
+					var webhookData = new
+					{
+						username = Config.Discord.WebhookName,
+						avatar_url = Config.Discord.WebhookAvatar,
+						content = Config.Discord.MessageText,
+						embeds = new[]
+						{
+							new
+							{
+								title = Config.Discord.EmbedTitle,
+								description,
+								color = Config.Discord.EmbedColor
+							}
+						}
+					};
+
+					using (var httpClient = new HttpClient())
+					using (var content = new MultipartFormDataContent())
+					{
+						content.Add(new StringContent(JsonSerializer.Serialize(webhookData), Encoding.UTF8, "application/json"), "payload_json");
+						if (Config.Discord.WebhookUploadFile)
+						{
+							content.Add(new ByteArrayContent(File.ReadAllBytes(zipPath)), "file", $"{fileName}.zip");
+						}
+
+						var response = await httpClient.PostAsync(Config.Discord.WebhookURL, content);
+						response.EnsureSuccessStatusCode();
+
+						Server.NextWorldUpdate(() =>
+						{
+							if (Config.General.LogUploads)
+								base.Logger.LogInformation($"Demo uploaded successfully: {fileName}");
+
+							if (Config.General.DeleteDemoAfterUpload)
+								File.Delete(demoPath);
+
+							if (Config.General.DeleteZippedDemoAfterUpload)
+								File.Delete(zipPath);
+						});
+					}
+				}
+				catch (Exception ex)
+				{
+					Server.NextWorldUpdate(() => base.Logger.LogError($"Error processing demo: {ex.Message}"));
+				}
+			});
 		}
 
 		public void ResetVariables()
