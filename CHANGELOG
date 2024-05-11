@@ -1,3 +1,19 @@
+-- 2024.05.11 - v1.2.1
+
+- feat: On plugin unload the recording will be stopped to process properly
+- feat: Even if timestamps disabled, adding them to files that already exists just to keep you safe
+- fix: Demo request mode not automatically records the round
+- fix: Demo cannot be recorded if duplicate happens
+- fix: Variables not reset on demo request mode
+- fix: Moved map record end to match panel instead of map change
+- fix: Moved map record start to first round start instead of map change
+- fix: Duplicated command triggers
+- fix: Custom named recording files not processed properly
+- fix: Silenced "tv_record Usage:" console message
+- fix: Removed prefix from config, cuz its used from langs folder now
+- fix: Langs folder added to the plugin
+- fix: Demo request print all never shown
+
 -- 2024.05.10 - v1.2.0
 
 - feat: Added request mode with !demo to only upload demo files if it was requested in the round (added with delete unused settings)

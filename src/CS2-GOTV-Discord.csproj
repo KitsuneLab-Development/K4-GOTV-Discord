@@ -18,4 +18,7 @@
     </PackageReference>
     <PackageReference Include="MegaApiClient" Version="1.10.4" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="lang\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

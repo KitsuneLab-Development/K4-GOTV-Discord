@@ -13,6 +13,10 @@
   <h1 align="center">KitsuneLab©</h1>
   <h3 align="center">CS2 GOTV Discord</h3>
   <a align="center">Automatically handles GOTV recording, able to crop demos for every round separately. Sends the recorded demo as zipped to Discord Webhook as attachment or upload to Mega and send the url. Customizable webhook, avatar, bot name, embed and more. Automatically stop recording on idle and additionaly it can be set to be used in request mode, so it records all round separately but upload only those rounds that has been requested by users with !demo.</a>
+<<<<<<< HEAD
+=======
+
+>>>>>>> c958616 (Patch v1.2.1)
   <p align="center">
     <br />
     <a href="https://github.com/K4ryuu/CS2-GOTV-Discord/releases">Download</a>
@@ -40,7 +44,6 @@ Your support keeps my creative engine running and allows me to share knowledge w
 To use this server addon, you'll need the following dependencies installed:
 
 - [**CounterStrikeSharp**](https://github.com/roflmuffin/CounterStrikeSharp/releases): CounterStrikeSharp allows you to write server plugins in C# for Counter-Strike 2/Source2/CS2
-- [**K4-RPG**](https://github.com/K4ryuu/K4-RPG): A plugin that allow players to collect experience and level up in a RPG-like system. Use the skill points to upgrade their skills.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

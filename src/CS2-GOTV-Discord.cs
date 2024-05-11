@@ -13,9 +13,6 @@ namespace K4ryuuCS2GOTVDiscord
 {
 	public sealed class PluginConfig : BasePluginConfig
 	{
-		[JsonPropertyName("prefix")]
-		public string Prefix { get; set; } = "{silver}[ {lime}K4-Demo {silver}]";
-
 		[JsonPropertyName("general")]
 		public GeneralSettings General { get; set; } = new GeneralSettings();
 
@@ -32,7 +29,7 @@ namespace K4ryuuCS2GOTVDiscord
 		public DemoRequestSettings DemoRequest { get; set; } = new DemoRequestSettings();
 
 		[JsonPropertyName("ConfigVersion")]
-		public override int Version { get; set; } = 4;
+		public override int Version { get; set; } = 5;
 
 		public class GeneralSettings
 		{
@@ -123,15 +120,15 @@ namespace K4ryuuCS2GOTVDiscord
 	public class CS2GOTVDiscordPlugin : BasePlugin, IPluginConfig<PluginConfig>
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.2.0";
+		public override string ModuleVersion => "1.2.1";
 		public override string ModuleAuthor => "K4ryuu";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
 		public string? fileName = null;
 		public double LastPlayerCheckTime;
-		public bool DemoRequestedThisRound;
+		public bool DemoRequestedThisRound = false;
 		public CounterStrikeSharp.API.Modules.Timers.Timer? reservedTimer = null;
-		public double DemoStartTime;
+		public double DemoStartTime = 0.0;
 		public bool IsPluginExecution = false;
 
 		public override void Load(bool hotReload)
@@ -139,26 +136,20 @@ namespace K4ryuuCS2GOTVDiscord
 			AddCommandListener("tv_record", CommandListener_Record);
 			AddCommandListener("tv_stoprecord", CommandListener_StopRecord);
 
-			RegisterListener<Listeners.OnMapStart>((mapName) =>
-			{
-				AddTimer(1.0f, () =>
-				{
-					if (Config.AutoRecord.Enabled)
-						Server.ExecuteCommand("tv_record");
-				});
-			});
-
-			RegisterListener<Listeners.OnMapEnd>(() =>
+			RegisterEventHandler((EventCsWinPanelMatch @event, GameEventInfo info) =>
 			{
 				Server.ExecuteCommand("tv_stoprecord");
+				return HookResult.Continue;
 			});
 
 			RegisterEventHandler((EventRoundStart @event, GameEventInfo info) =>
 			{
 				if (Config.AutoRecord.Enabled && Config.AutoRecord.CropRounds)
 				{
-					Server.ExecuteCommand("tv_stoprecord");
-					Server.NextWorldUpdate(() => Server.ExecuteCommand("tv_record"));
+					if (DemoStartTime != 0.0)
+						Server.ExecuteCommand("tv_stoprecord");
+
+					Server.NextWorldUpdate(() => Server.ExecuteCommand("tv_record \"autodemo\""));
 				}
 
 				return HookResult.Continue;
@@ -191,6 +182,14 @@ namespace K4ryuuCS2GOTVDiscord
 					}
 				});
 			}
+
+			if (Config.AutoRecord.Enabled && hotReload)
+				Server.ExecuteCommand("tv_record \"autodemo\"");
+		}
+
+		public override void Unload(bool hotReload)
+		{
+			Server.ExecuteCommand("tv_stoprecord");
 		}
 
 		private HookResult CommandListener_Record(CCSPlayerController? player, CommandInfo info)
@@ -200,20 +199,24 @@ namespace K4ryuuCS2GOTVDiscord
 				IsPluginExecution = true;
 
 				DemoStartTime = Server.EngineTime;
-				fileName = string.IsNullOrEmpty(info.ArgString) ? "demo" : info.ArgString;
+
+				string fileNameArgument = info.ArgString.Trim().Replace("\"", "");
+				fileName = string.IsNullOrEmpty(fileNameArgument) ? "demo" : fileNameArgument;
 
 				if (Config.AutoRecord.Enabled && Config.AutoRecord.CropRounds)
 					fileName = $"{fileName}-{Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules?.TotalRoundsPlayed + 1}";
 
-				if (Config.General.UseTimestampedFilename)
+				if (Config.General.UseTimestampedFilename || File.Exists(Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem")))
 					fileName = $"{fileName}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
 
 				Server.ExecuteCommand($"tv_record \"discord_demos/{fileName}.dem\"");
+				return HookResult.Stop;
 			}
 			else
+			{
 				IsPluginExecution = false;
-
-			return HookResult.Continue;
+				return HookResult.Continue;
+			}
 		}
 
 		private HookResult CommandListener_StopRecord(CCSPlayerController? player, CommandInfo info)
@@ -224,15 +227,16 @@ namespace K4ryuuCS2GOTVDiscord
 			{
 				if (Config.DemoRequest.DeleteUnused)
 				{
-					Task.Run(() =>
+					Task.Run(async () =>
 					{
 						while (IsFileLocked(demoPath))
-							Thread.Sleep(1000);
+							await Task.Delay(1000);
 
 						File.Delete(demoPath);
 					});
 				}
 
+				ResetVariables();
 				return HookResult.Continue;
 			}
 
@@ -330,29 +334,40 @@ namespace K4ryuuCS2GOTVDiscord
 				});
 			}
 
+			ResetVariables();
+			return HookResult.Continue;
+		}
+
+		public void ResetVariables()
+		{
+			DemoRequestedThisRound = false;
 			DemoStartTime = 0.0;
 			fileName = null;
-			DemoRequestedThisRound = false;
-			return HookResult.Continue;
 		}
 
 		public void Command_DemoRequest(CCSPlayerController? player, CommandInfo info)
 		{
-			DemoRequestedThisRound = true;
-
 			if (Config.DemoRequest.PrintAll)
 			{
 				if (!DemoRequestedThisRound)
-					Server.PrintToChatAll($" {Config.Prefix} {Localizer["k4.chat.demo.request.all", player?.PlayerName ?? "Server"]}");
+					Server.PrintToChatAll($" {Localizer["k4.general.prefix"]} {Localizer["k4.chat.demo.request.all", player?.PlayerName ?? "Server"]}");
 			}
 			else
-				info.ReplyToCommand($" {Config.Prefix} {Localizer["k4.chat.demo.request.self"]}");
+				info.ReplyToCommand($" {Localizer["k4.general.prefix"]} {Localizer["k4.chat.demo.request.self"]}");
+
+			DemoRequestedThisRound = true;
 		}
 
 		public void OnConfigParsed(PluginConfig config)
 		{
 			if (config.Version < Config.Version)
 				base.Logger.LogWarning("Configuration version mismatch (Expected: {0} | Current: {1})", this.Config.Version, config.Version);
+
+			if (config.DemoRequest.Enabled)
+			{
+				config.AutoRecord.Enabled = true;
+				config.AutoRecord.CropRounds = true;
+			}
 
 			if (config.AutoRecord.CropRounds && !config.AutoRecord.Enabled)
 				base.Logger.LogWarning("AutoRecord.CropRounds is enabled but AutoRecord.Enabled is disabled. AutoRecord.CropRounds will not work without AutoRecord.Enabled enabled.");
