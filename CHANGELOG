@@ -1,5 +1,15 @@
 -- 2024.05.13 - v1.2.6
 
+- feat: Added new placeholder - {requester_name} - Returns all people name who requested the demo a, b, c
+- feat: Added new placeholder - {requester_steamid} - Returns all people steamid who requested the demo a, b, c
+- feat: Added new placeholder - {requester_both} - Returns all people both who requested the demo a (as), b (bs), c (cs)
+- feat: Added new placeholder - {requester_count} - Returns the count of people who requested the demo
+- feat: Added new placeholder - {player_count} - Returns the count of online real players
+- feat: Added new placeholder - {requester_name[x]} - Returns given index of people name who requested the demo
+- feat: Added new placeholder - {requester_steamid[x]} - Returns given index of people steamid who requested the demo
+- feat: Added new placeholder - {requester_both[x]} - Returns given index of people both who requested the demo
+- upgrade: Added proper file deletion for the demo files with logging and file lock watcher
+- fix: Error log on hotReload
 - remove: Removed fix file open fix, because it should not happen on healthy servers
 
 -- 2024.05.11 - v1.2.5

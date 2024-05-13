@@ -127,6 +127,7 @@ namespace K4ryuuCS2GOTVDiscord
 		public string? fileName = null;
 		public double LastPlayerCheckTime;
 		public bool DemoRequestedThisRound = false;
+		public List<(string name, ulong steamid)> Requesters = new List<(string name, ulong steamid)>();
 		public CounterStrikeSharp.API.Modules.Timers.Timer? reservedTimer = null;
 		public double DemoStartTime = 0.0;
 		public List<string> DelayedUploads = new List<string>();
@@ -170,6 +171,7 @@ namespace K4ryuuCS2GOTVDiscord
 					if (DemoStartTime != 0.0)
 						Server.ExecuteCommand("tv_stoprecord");
 
+					Requesters.Clear();
 					Server.NextWorldUpdate(() => Server.ExecuteCommand("tv_record \"autodemo\""));
 				}
 
@@ -255,7 +257,9 @@ namespace K4ryuuCS2GOTVDiscord
 
 		private HookResult CommandListener_StopRecord(CCSPlayerController? player, CommandInfo info)
 		{
-			if (!string.IsNullOrEmpty(fileName) && DelayedUploads.Contains(fileName))
+			Logger.LogInformation("Recording stopped. Filename: {0}", fileName);
+
+			if (string.IsNullOrEmpty(fileName) || DelayedUploads.Contains(fileName))
 			{
 				ResetVariables();
 				return HookResult.Continue;
@@ -272,15 +276,7 @@ namespace K4ryuuCS2GOTVDiscord
 			if (Config.DemoRequest.Enabled && !DemoRequestedThisRound)
 			{
 				if (Config.DemoRequest.DeleteUnused)
-				{
-					Task.Run(async () =>
-					{
-						while (IsFileLocked(demoPath))
-							await Task.Delay(1000);
-
-						File.Delete(demoPath);
-					});
-				}
+					DeleteFile(demoPath);
 
 				ResetVariables();
 				return HookResult.Continue;
@@ -309,7 +305,19 @@ namespace K4ryuuCS2GOTVDiscord
 				{ "length", $"{demoLength.Minutes:00}:{demoLength.Seconds:00}" },
 				{ "round", (Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules?.TotalRoundsPlayed + 1)?.ToString() ?? "Unknown" },
 				{ "mega_link", "Not uploaded to mega." },
+				{ "requester_name", string.Join(", ", Requesters.Select(x => x.name))},
+				{ "requester_steamid", string.Join(", ", Requesters.Select(x => x.steamid)) },
+				{ "requester_both", string.Join(", ", Requesters.Select(x => $"{x.name} ({x.steamid})")) },
+				{ "requester_count", Requesters.Count.ToString() },
+				{ "player_count", GetPlayerCount().ToString() },
 			};
+
+			for (int i = 0; i < Requesters.Count; i++)
+			{
+				placeholderValues[$"requester_name[{i}]"] = Requesters.Count > i ? Requesters[i].name : "Unknown";
+				placeholderValues[$"requester_steamid[{i}]"] = Requesters.Count > i ? Requesters[i].steamid.ToString() : "Unknown";
+				placeholderValues[$"requester_both[{i}]"] = Requesters.Count > i ? $"{Requesters[i].name} ({Requesters[i].steamid})" : "Unknown";
+			}
 
 			Task.Run(async () =>
 			{
@@ -375,16 +383,35 @@ namespace K4ryuuCS2GOTVDiscord
 								base.Logger.LogInformation($"Demo uploaded successfully: {fileName}");
 
 							if (Config.General.DeleteDemoAfterUpload)
-								File.Delete(demoPath);
+								DeleteFile(demoPath);
 
 							if (Config.General.DeleteZippedDemoAfterUpload)
-								File.Delete(zipPath);
+								DeleteFile(zipPath);
 						});
 					}
 				}
 				catch (Exception ex)
 				{
 					Server.NextWorldUpdate(() => base.Logger.LogError($"Error processing demo: {ex.Message}"));
+				}
+			});
+		}
+
+		public void DeleteFile(string path)
+		{
+			Task.Run(() =>
+			{
+				while (IsFileLocked(path))
+					Thread.Sleep(1000);
+
+				try
+				{
+					if (File.Exists(path))
+						File.Delete(path);
+				}
+				catch (Exception ex)
+				{
+					Logger.LogError($"An error occurred while deleting a demo file: {ex.Message}");
 				}
 			});
 		}
@@ -405,6 +432,9 @@ namespace K4ryuuCS2GOTVDiscord
 			}
 			else
 				info.ReplyToCommand($" {Localizer["k4.general.prefix"]} {Localizer["k4.chat.demo.request.self"]}");
+
+			if (player?.IsValid == true && !Requesters.Contains((player.PlayerName, player.SteamID)))
+				Requesters.Add((player.PlayerName, player.SteamID));
 
 			DemoRequestedThisRound = true;
 		}
