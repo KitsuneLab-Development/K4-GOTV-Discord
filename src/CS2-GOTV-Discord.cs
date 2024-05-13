@@ -29,7 +29,7 @@ namespace K4ryuuCS2GOTVDiscord
 		public DemoRequestSettings DemoRequest { get; set; } = new DemoRequestSettings();
 
 		[JsonPropertyName("ConfigVersion")]
-		public override int Version { get; set; } = 6;
+		public override int Version { get; set; } = 7;
 
 		public class GeneralSettings
 		{
@@ -47,9 +47,6 @@ namespace K4ryuuCS2GOTVDiscord
 
 			[JsonPropertyName("use-timestamped-filename")]
 			public bool UseTimestampedFilename { get; set; } = true;
-
-			[JsonPropertyName("file-open-problem-fix")]
-			public bool FileOpenProblemFix { get; set; } = false;
 		}
 
 		public class DiscordSettings
@@ -123,7 +120,7 @@ namespace K4ryuuCS2GOTVDiscord
 	public class CS2GOTVDiscordPlugin : BasePlugin, IPluginConfig<PluginConfig>
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.2.5";
+		public override string ModuleVersion => "1.2.6";
 		public override string ModuleAuthor => "K4ryuu";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
@@ -163,7 +160,7 @@ namespace K4ryuuCS2GOTVDiscord
 				{
 					foreach (string fileName in DelayedUploads)
 					{
-						string demoPath = Config.General.FileOpenProblemFix ? Path.Combine(Server.GameDirectory, "csgo", $"{fileName}.dem") : Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem");
+						string demoPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem");
 						ProcessUpload(fileName, demoPath);
 					}
 				}
@@ -179,8 +176,7 @@ namespace K4ryuuCS2GOTVDiscord
 				return HookResult.Continue;
 			});
 
-			if (!Config.General.FileOpenProblemFix)
-				Directory.CreateDirectory(Path.Combine(Server.GameDirectory, "csgo", "discord_demos"));
+			Directory.CreateDirectory(Path.Combine(Server.GameDirectory, "csgo", "discord_demos"));
 
 			if (Config.DemoRequest.Enabled)
 				AddCommand($"css_demo", "Request a demo upload at the end of the round", Command_DemoRequest);
@@ -243,11 +239,11 @@ namespace K4ryuuCS2GOTVDiscord
 				if (Config.AutoRecord.Enabled && Config.AutoRecord.CropRounds)
 					fileName = $"{fileName}-{Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules?.TotalRoundsPlayed + 1}";
 
-				bool fileExists = Config.General.FileOpenProblemFix ? File.Exists(Path.Combine(Server.GameDirectory, "csgo", $"{fileName}.dem")) : File.Exists(Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem"));
+				bool fileExists = File.Exists(Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem"));
 				if (Config.General.UseTimestampedFilename || fileExists)
 					fileName = $"{fileName}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
 
-				Server.ExecuteCommand($"tv_record \"{(Config.General.FileOpenProblemFix ? "" : "discord_demos/")}{(fileName.EndsWith(".dem") ? fileName : $"{fileName}.dem")}\"");
+				Server.ExecuteCommand($"tv_record \"discord_demos/{(fileName.EndsWith(".dem") ? fileName : $"{fileName}.dem")}\"");
 				return HookResult.Stop;
 			}
 			else
@@ -265,11 +261,11 @@ namespace K4ryuuCS2GOTVDiscord
 				return HookResult.Continue;
 			}
 
-			string demoPath = Config.General.FileOpenProblemFix ? Path.Combine(Server.GameDirectory, "csgo", $"{fileName}.dem") : Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem");
+			string demoPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem");
 
 			if (!File.Exists(demoPath))
 			{
-				Logger.LogError($"Demo file not found: {demoPath} - Recording stopped without processing. {(!Config.General.FileOpenProblemFix ? "You should probably set FileOpenProblemFix to true in the config." : "")}");
+				Logger.LogError($"Demo file not found: {demoPath} - Recording stopped without processing.");
 				return HookResult.Continue;
 			}
 
@@ -301,7 +297,7 @@ namespace K4ryuuCS2GOTVDiscord
 
 		public void ProcessUpload(string fileName, string demoPath)
 		{
-			string zipPath = Config.General.FileOpenProblemFix ? Path.Combine(Server.GameDirectory, "csgo", $"{fileName}.zip") : Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.zip");
+			string zipPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.zip");
 
 			var demoLength = TimeSpan.FromSeconds(Server.EngineTime - DemoStartTime);
 			var placeholderValues = new Dictionary<string, string>
