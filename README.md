@@ -16,7 +16,8 @@
 <<<<<<< HEAD
 =======
 
->>>>>>> c958616 (Patch v1.2.1)
+> > > > > > > c958616 (Patch v1.2.1)
+
   <p align="center">
     <br />
     <a href="https://github.com/K4ryuu/CS2-GOTV-Discord/releases">Download</a>
@@ -38,6 +39,27 @@ Your support keeps my creative engine running and allows me to share knowledge w
 </p>
 
 <!-- ABOUT THE PROJECT -->
+
+### placeholderValues
+
+- `map` - Represents the name of the server map.
+- `date` - Represents the current date in the format "yyyy-MM-dd".
+- `time` - Represents the current time in the format "HH:mm:ss".
+- `timedate` - Represents the current date and time in the format "yyyy-MM-dd HH:mm:ss".
+- `length` - Represents the duration of something, likely a demo length, formatted as "mm:ss".
+- `round` - Represents the total number of rounds played in a game.
+- `mega_link` - Represents whether a file has been uploaded to Mega or not.
+- `requester_name` - Represents the names of the requesters, separated by commas.
+- `requester_steamid` - Represents the Steam IDs of the requesters, separated by commas.
+- `requester_both` - Represents both the names and Steam IDs of the requesters, formatted as "name (steamid)", separated by commas.
+- `requester_count` - Represents the total count of requesters.
+- `player_count` - Represents the total count of players.
+
+Additionally, there are placeholders for multiple requesters, indexed by their count:
+
+- `requester_name[i]` - Represents the name of the ith requester.
+- `requester_steamid[i]` - Represents the Steam ID of the ith requester.
+- `requester_both[i]` - Represents the name and Steam ID of the ith requester.
 
 ### Dependencies
 
