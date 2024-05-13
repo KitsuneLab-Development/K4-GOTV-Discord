@@ -13,10 +13,6 @@
   <h1 align="center">KitsuneLab©</h1>
   <h3 align="center">CS2 GOTV Discord</h3>
   <a align="center">Automatically handles GOTV recording, able to crop demos for every round separately. Sends the recorded demo as zipped to Discord Webhook as attachment or upload to Mega and send the url. Customizable webhook, avatar, bot name, embed and more. Automatically stop recording on idle and additionaly it can be set to be used in request mode, so it records all round separately but upload only those rounds that has been requested by users with !demo.</a>
-<<<<<<< HEAD
-=======
-
-> > > > > > > c958616 (Patch v1.2.1)
 
   <p align="center">
     <br />
@@ -40,7 +36,9 @@ Your support keeps my creative engine running and allows me to share knowledge w
 
 <!-- ABOUT THE PROJECT -->
 
-### placeholderValues
+### Placeholder values
+
+They all should be used in the format `{placeholder}`
 
 - `map` - Represents the name of the server map.
 - `date` - Represents the current date in the format "yyyy-MM-dd".
