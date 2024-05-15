@@ -1,3 +1,7 @@
+-- 2024.05.15 - v1.2.7
+
+- fix: Applied variable placeholder replacement for all texts
+
 -- 2024.05.13 - v1.2.6
 
 - feat: Added new placeholder - {requester_name} - Returns all people name who requested the demo a, b, c

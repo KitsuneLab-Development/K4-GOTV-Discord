@@ -120,7 +120,7 @@ namespace K4ryuuCS2GOTVDiscord
 	public class CS2GOTVDiscordPlugin : BasePlugin, IPluginConfig<PluginConfig>
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.2.6";
+		public override string ModuleVersion => "1.2.7";
 		public override string ModuleAuthor => "K4ryuu";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
@@ -343,23 +343,19 @@ namespace K4ryuuCS2GOTVDiscord
 						placeholderValues["mega_link"] = downloadLink;
 					}
 
-					var description = Config.Discord.EmbedDescription;
-					foreach (var placeholder in placeholderValues)
-					{
-						description = description.Replace($"{{{placeholder.Key}}}", placeholder.Value);
-					}
+					var description = ReplacePlaceholders(Config.Discord.EmbedDescription, placeholderValues);
 
 					var webhookData = new
 					{
 						username = Config.Discord.WebhookName,
 						avatar_url = Config.Discord.WebhookAvatar,
-						content = Config.Discord.MessageText,
+						content = ReplacePlaceholders(Config.Discord.MessageText, placeholderValues),
 						embeds = new[]
 						{
 							new
 							{
-								title = Config.Discord.EmbedTitle,
-								description,
+								title = ReplacePlaceholders(Config.Discord.EmbedTitle, placeholderValues) ,
+								description= ReplacePlaceholders(description, placeholderValues),
 								color = Config.Discord.EmbedColor
 							}
 						}
@@ -395,6 +391,16 @@ namespace K4ryuuCS2GOTVDiscord
 					Server.NextWorldUpdate(() => base.Logger.LogError($"Error processing demo: {ex.Message}"));
 				}
 			});
+		}
+
+		public string ReplacePlaceholders(string input, Dictionary<string, string> placeholders)
+		{
+			foreach (var placeholder in placeholders)
+			{
+				input = input.Replace($"{{{placeholder.Key}}}", placeholder.Value);
+			}
+
+			return input;
 		}
 
 		public void DeleteFile(string path)
