@@ -120,7 +120,7 @@ namespace K4ryuuCS2GOTVDiscord
 	public class CS2GOTVDiscordPlugin : BasePlugin, IPluginConfig<PluginConfig>
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.2.7";
+		public override string ModuleVersion => "1.2.8";
 		public override string ModuleAuthor => "K4ryuu";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
@@ -137,8 +137,8 @@ namespace K4ryuuCS2GOTVDiscord
 		{
 			AddCommandListener("tv_record", CommandListener_Record);
 			AddCommandListener("tv_stoprecord", CommandListener_StopRecord);
-			AddCommandListener("changelevel", CommandListener_Changelevel);
-			AddCommandListener("map", CommandListener_Changelevel);
+			AddCommandListener("changelevel", CommandListener_Changelevel, HookMode.Pre);
+			AddCommandListener("map", CommandListener_Changelevel, HookMode.Pre);
 
 			RegisterEventHandler((EventCsWinPanelMatch @event, GameEventInfo info) =>
 			{
@@ -221,8 +221,6 @@ namespace K4ryuuCS2GOTVDiscord
 			{
 				DelayedUploads.Add(fileName);
 				Server.ExecuteCommand("tv_stoprecord");
-				Server.ExecuteCommand($"changelevel \"{info.ArgString.Trim().Replace("\"", "").ToLower()}\"");
-				return HookResult.Stop;
 			}
 			return HookResult.Continue;
 		}

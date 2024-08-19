@@ -1,3 +1,7 @@
+-- 2024.05.15 - v1.2.8
+
+- fix: Possibly resolved the issue that breaks other plugins
+
 -- 2024.05.15 - v1.2.7
 
 - fix: Applied variable placeholder replacement for all texts
