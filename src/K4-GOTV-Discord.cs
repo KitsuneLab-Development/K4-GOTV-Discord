@@ -121,7 +121,7 @@ namespace K4ryuuCS2GOTVDiscord
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
 		public override string ModuleVersion => "1.2.8";
-		public override string ModuleAuthor => "K4ryuu";
+		public override string ModuleAuthor => "K4ryuu @ KitsuneLab";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
 		public string? fileName = null;
