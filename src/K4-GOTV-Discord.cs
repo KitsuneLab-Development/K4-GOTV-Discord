@@ -82,12 +82,6 @@ namespace K4ryuuCS2GOTVDiscord
 			[JsonPropertyName("embed-title")]
 			public string EmbedTitle { get; set; } = "New CSGO Demo Available";
 
-			[JsonPropertyName("embed-description")]
-			public string EmbedDescription { get; set; } = "Match demo details:\nMap: {map}\nRecording Date: {date}\nRecording Time: {time}\nRecording Timedate: {timedate}\nDemo Length: {length}\nRound: {round}\nMega URL: {mega_link}\nFTP URL: {ftp_link}";
-
-			[JsonPropertyName("embed-color")]
-			public int EmbedColor { get; set; } = 3447003;
-
 			[JsonPropertyName("message-text")]
 			public string MessageText { get; set; } = "@everyone New CSGO Demo Available!";
 		}
