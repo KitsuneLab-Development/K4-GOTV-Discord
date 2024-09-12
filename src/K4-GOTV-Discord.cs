@@ -387,7 +387,6 @@ namespace K4ryuuCS2GOTVDiscord
 			try
 			{
 				string remoteFilePath = ReplacePlaceholdersForFileName(Path.Combine(Config.Ftp.RemoteDirectory, Path.GetFileName(zipPath)).Replace("\\", "/"), Path.GetFileName(zipPath));
-				Logger.LogInformation($"Uploading demo to FTP: {fileName}");
 
 				Task.Run(async () =>
 				{
