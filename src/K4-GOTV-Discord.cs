@@ -4,10 +4,13 @@ using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Core.Attributes;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
-using System.IO.Compression;
+using FluentFTP;
 using System.Text;
-using System.Text.Json;
+using System.IO.Compression;
 using CG.Web.MegaApiClient;
+using FluentFTP.Exceptions;
+using CounterStrikeSharp.API.Modules.Cvars;
+using System.Runtime.InteropServices;
 
 namespace K4ryuuCS2GOTVDiscord
 {
@@ -28,8 +31,11 @@ namespace K4ryuuCS2GOTVDiscord
 		[JsonPropertyName("demo-request")]
 		public DemoRequestSettings DemoRequest { get; set; } = new DemoRequestSettings();
 
+		[JsonPropertyName("ftp")]
+		public FtpSettings Ftp { get; set; } = new FtpSettings();
+
 		[JsonPropertyName("ConfigVersion")]
-		public override int Version { get; set; } = 7;
+		public override int Version { get; set; } = 9;
 
 		public class GeneralSettings
 		{
@@ -45,8 +51,18 @@ namespace K4ryuuCS2GOTVDiscord
 			[JsonPropertyName("log-uploads")]
 			public bool LogUploads { get; set; } = true;
 
-			[JsonPropertyName("use-timestamped-filename")]
-			public bool UseTimestampedFilename { get; set; } = true;
+			[JsonPropertyName("log-deletions")]
+			public bool LogDeletions { get; set; } = true;
+
+			[JsonPropertyName("default-file-name")]
+			public string DefaultFileName { get; set; } = "demo";
+
+			[JsonPropertyName("regular-file-naming-pattern")]
+			public string RegularFileNamingPattern { get; set; } = "{fileName}_{map}_{date}_{time}";
+
+			[JsonPropertyName("crop-rounds-file-naming-pattern")]
+			public string CropRoundsFileNamingPattern { get; set; } = "{fileName}_{map}_round{round}_{date}_{time}";
+
 		}
 
 		public class DiscordSettings
@@ -67,7 +83,7 @@ namespace K4ryuuCS2GOTVDiscord
 			public string EmbedTitle { get; set; } = "New CSGO Demo Available";
 
 			[JsonPropertyName("embed-description")]
-			public string EmbedDescription { get; set; } = "Match demo details:\nMap: {map}\nRecording Date: {date}\nRecording Time: {time}\nRecording Timedate: {timedate}\nDemo Length: {length}\nRound: {round}\nMega URL: {mega_link}";
+			public string EmbedDescription { get; set; } = "Match demo details:\nMap: {map}\nRecording Date: {date}\nRecording Time: {time}\nRecording Timedate: {timedate}\nDemo Length: {length}\nRound: {round}\nMega URL: {mega_link}\nFTP URL: {ftp_link}";
 
 			[JsonPropertyName("embed-color")]
 			public int EmbedColor { get; set; } = 3447003;
@@ -96,6 +112,9 @@ namespace K4ryuuCS2GOTVDiscord
 
 		public class MegaSettings
 		{
+			[JsonPropertyName("enabled")]
+			public bool Enabled { get; set; } = false;
+
 			[JsonPropertyName("email")]
 			public string Email { get; set; } = "";
 
@@ -114,24 +133,48 @@ namespace K4ryuuCS2GOTVDiscord
 			[JsonPropertyName("delete-unused")]
 			public bool DeleteUnused { get; set; } = true;
 		}
+
+		public class FtpSettings
+		{
+			[JsonPropertyName("enabled")]
+			public bool Enabled { get; set; } = false;
+
+			[JsonPropertyName("host")]
+			public string Host { get; set; } = "";
+
+			[JsonPropertyName("port")]
+			public int Port { get; set; } = 21;
+
+			[JsonPropertyName("username")]
+			public string Username { get; set; } = "";
+
+			[JsonPropertyName("password")]
+			public string Password { get; set; } = "";
+
+			[JsonPropertyName("remote-directory")]
+			public string RemoteDirectory { get; set; } = "/";
+
+			[JsonPropertyName("use-sftp")]
+			public bool UseSftp { get; set; } = false;
+		}
 	}
 
-	[MinimumApiVersion(227)]
+	[MinimumApiVersion(250)]
 	public class CS2GOTVDiscordPlugin : BasePlugin, IPluginConfig<PluginConfig>
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.2.8";
+		public override string ModuleVersion => "1.3.0";
 		public override string ModuleAuthor => "K4ryuu @ KitsuneLab";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
 		public string? fileName = null;
 		public double LastPlayerCheckTime;
 		public bool DemoRequestedThisRound = false;
-		public List<(string name, ulong steamid)> Requesters = new List<(string name, ulong steamid)>();
+		public List<(string name, ulong steamid)> Requesters = [];
 		public CounterStrikeSharp.API.Modules.Timers.Timer? reservedTimer = null;
 		public double DemoStartTime = 0.0;
-		public List<string> DelayedUploads = new List<string>();
 		public bool IsPluginExecution = false;
+		public bool PluginRecording = false;
 
 		public override void Load(bool hotReload)
 		{
@@ -150,22 +193,12 @@ namespace K4ryuuCS2GOTVDiscord
 			{
 				if (!string.IsNullOrEmpty(fileName) && DemoStartTime != 0.0)
 				{
-					DelayedUploads.Add(fileName);
 					Server.ExecuteCommand("tv_stoprecord");
 				}
 			});
 
 			RegisterEventHandler((EventRoundStart @event, GameEventInfo info) =>
 			{
-				if (DelayedUploads.Count > 0)
-				{
-					foreach (string fileName in DelayedUploads)
-					{
-						string demoPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem");
-						ProcessUpload(fileName, demoPath);
-					}
-				}
-
 				if (Config.AutoRecord.Enabled && Config.AutoRecord.CropRounds)
 				{
 					if (DemoStartTime != 0.0)
@@ -175,6 +208,17 @@ namespace K4ryuuCS2GOTVDiscord
 					Server.NextWorldUpdate(() => Server.ExecuteCommand("tv_record \"autodemo\""));
 				}
 
+				return HookResult.Continue;
+			});
+
+			RegisterEventHandler((EventPlayerActivate @event, GameEventInfo info) =>
+			{
+				CCSPlayerController? player = @event.Userid;
+				if (player?.IsValid == true && !player.IsBot && !player.IsHLTV)
+					LastPlayerCheckTime = Server.EngineTime;
+
+				if (!PluginRecording && Config.AutoRecord.Enabled)
+					Server.ExecuteCommand("tv_record");
 				return HookResult.Continue;
 			});
 
@@ -219,7 +263,6 @@ namespace K4ryuuCS2GOTVDiscord
 		{
 			if (!string.IsNullOrEmpty(fileName) && DemoStartTime != 0.0)
 			{
-				DelayedUploads.Add(fileName);
 				Server.ExecuteCommand("tv_stoprecord");
 			}
 			return HookResult.Continue;
@@ -227,6 +270,12 @@ namespace K4ryuuCS2GOTVDiscord
 
 		private HookResult CommandListener_Record(CCSPlayerController? player, CommandInfo info)
 		{
+			if (!Config.AutoRecord.Enabled)
+				return HookResult.Continue;
+
+			if (PluginRecording)
+				return HookResult.Continue;
+
 			if (!IsPluginExecution)
 			{
 				IsPluginExecution = true;
@@ -234,20 +283,31 @@ namespace K4ryuuCS2GOTVDiscord
 				DemoStartTime = Server.EngineTime;
 
 				string fileNameArgument = info.ArgString.Trim().Replace("\"", "");
-				fileName = string.IsNullOrEmpty(fileNameArgument) ? "demo" : fileNameArgument;
+				string baseFileName = string.IsNullOrEmpty(fileNameArgument) ? Config.General.DefaultFileName : fileNameArgument;
 
-				if (Config.AutoRecord.Enabled && Config.AutoRecord.CropRounds)
-					fileName = $"{fileName}-{Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules?.TotalRoundsPlayed + 1}";
+				string pattern = Config.AutoRecord.Enabled && Config.AutoRecord.CropRounds
+					? Config.General.CropRoundsFileNamingPattern
+					: Config.General.RegularFileNamingPattern;
 
-				bool fileExists = File.Exists(Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem"));
-				if (Config.General.UseTimestampedFilename || fileExists)
-					fileName = $"{fileName}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
+				fileName = ReplacePlaceholdersForFileName(pattern, baseFileName);
 
-				Server.ExecuteCommand($"tv_record \"discord_demos/{(fileName.EndsWith(".dem") ? fileName : $"{fileName}.dem")}\"");
+				// Ensure unique filename
+				string fullPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem");
+				int counter = 1;
+				while (File.Exists(fullPath))
+				{
+					fileName = $"{fileName}_{counter}";
+					fullPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos", $"{fileName}.dem");
+					counter++;
+				}
+
+				Server.ExecuteCommand($"tv_record \"discord_demos/{fileName}.dem\"");
 				return HookResult.Stop;
 			}
 			else
 			{
+				PluginRecording = true;
+
 				IsPluginExecution = false;
 				return HookResult.Continue;
 			}
@@ -255,9 +315,14 @@ namespace K4ryuuCS2GOTVDiscord
 
 		private HookResult CommandListener_StopRecord(CCSPlayerController? player, CommandInfo info)
 		{
+			if (!PluginRecording)
+				return HookResult.Continue;
+
+			PluginRecording = false;
+
 			Logger.LogInformation("Recording stopped. Filename: {0}", fileName);
 
-			if (string.IsNullOrEmpty(fileName) || DelayedUploads.Contains(fileName))
+			if (string.IsNullOrEmpty(fileName))
 			{
 				ResetVariables();
 				return HookResult.Continue;
@@ -274,7 +339,7 @@ namespace K4ryuuCS2GOTVDiscord
 			if (Config.DemoRequest.Enabled && !DemoRequestedThisRound)
 			{
 				if (Config.DemoRequest.DeleteUnused)
-					DeleteFile(demoPath);
+					Task.Run(() => DeleteFileAsync(demoPath));
 
 				ResetVariables();
 				return HookResult.Continue;
@@ -296,102 +361,169 @@ namespace K4ryuuCS2GOTVDiscord
 			var demoLength = TimeSpan.FromSeconds(Server.EngineTime - DemoStartTime);
 			var placeholderValues = new Dictionary<string, string>
 			{
+				{ "webhook_name", Config.Discord.WebhookName },
+				{ "webhook_avatar", Config.Discord.WebhookAvatar },
+				{ "message_text", Config.Discord.MessageText },
+				{ "embed_title", Config.Discord.EmbedTitle },
 				{ "map", Server.MapName },
 				{ "date", DateTime.Now.ToString("yyyy-MM-dd") },
 				{ "time", DateTime.Now.ToString("HH:mm:ss") },
 				{ "timedate", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") },
 				{ "length", $"{demoLength.Minutes:00}:{demoLength.Seconds:00}" },
-				{ "round", (Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules?.TotalRoundsPlayed + 1)?.ToString() ?? "Unknown" },
-				{ "mega_link", "Not uploaded to mega." },
-				{ "requester_name", string.Join(", ", Requesters.Select(x => x.name))},
+				{ "round", (GameRules()?.GameRules?.TotalRoundsPlayed + 1)?.ToString() ?? "Unknown" },
+				{ "mega_link", "Not uploaded to Mega." },
+				{ "ftp_link", "Not uploaded to FTP." },
+				{ "requester_name", string.Join(", ", Requesters.Select(x => x.name)) },
 				{ "requester_steamid", string.Join(", ", Requesters.Select(x => x.steamid)) },
-				{ "requester_both", string.Join(", ", Requesters.Select(x => $"{x.name} ({x.steamid})")) },
+				{ "requester_both", string.Join("\n", Requesters.Select(x => $"{x.name} ({x.steamid})")) },
 				{ "requester_count", Requesters.Count.ToString() },
 				{ "player_count", GetPlayerCount().ToString() },
+				{ "server_name", ConVar.Find("hostname")?.StringValue ?? "Unknown Server" },
+				{ "fileName", Path.GetFileNameWithoutExtension(fileName) },
+				{ "iso_timestamp", DateTime.UtcNow.ToString("o") },
+				{ "file_size_warning", "" }
 			};
 
-			for (int i = 0; i < Requesters.Count; i++)
+			try
 			{
-				placeholderValues[$"requester_name[{i}]"] = Requesters.Count > i ? Requesters[i].name : "Unknown";
-				placeholderValues[$"requester_steamid[{i}]"] = Requesters.Count > i ? Requesters[i].steamid.ToString() : "Unknown";
-				placeholderValues[$"requester_both[{i}]"] = Requesters.Count > i ? $"{Requesters[i].name} ({Requesters[i].steamid})" : "Unknown";
-			}
+				string remoteFilePath = ReplacePlaceholdersForFileName(Path.Combine(Config.Ftp.RemoteDirectory, Path.GetFileName(zipPath)).Replace("\\", "/"), Path.GetFileName(zipPath));
+				Logger.LogInformation($"Uploading demo to FTP: {fileName}");
 
-			Task.Run(async () =>
-			{
-				try
+				Task.Run(async () =>
 				{
-					while (IsFileLocked(demoPath))
-						Thread.Sleep(1000);
-
+					// Zip the demo file
 					using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
 					{
 						archive.CreateEntryFromFile(demoPath, Path.GetFileName(demoPath), CompressionLevel.Optimal);
 					}
 
-					if (!string.IsNullOrEmpty(Config.Mega.Email) && !string.IsNullOrEmpty(Config.Mega.Password))
+					// Upload to FTP if enabled
+					if (Config.Ftp.Enabled && !string.IsNullOrEmpty(Config.Ftp.Host) && !string.IsNullOrEmpty(Config.Ftp.Username) && !string.IsNullOrEmpty(Config.Ftp.Password))
+					{
+						string ftpLink = await UploadToFtp(zipPath, remoteFilePath);
+						placeholderValues["ftp_link"] = ftpLink;
+					}
+
+					// Upload to Mega if enabled
+					if (Config.Mega.Enabled && !string.IsNullOrEmpty(Config.Mega.Email) && !string.IsNullOrEmpty(Config.Mega.Password))
 					{
 						var client = new MegaApiClient();
-						client.Login(Config.Mega.Email, Config.Mega.Password);
+						await client.LoginAsync(Config.Mega.Email, Config.Mega.Password);
 
-						var rootNode = client.GetNodes().Single(x => x.Type == NodeType.Root);
+						var rootNode = (await client.GetNodesAsync()).Single(x => x.Type == NodeType.Root);
 						var uploadedNode = await client.UploadFileAsync(zipPath, rootNode);
-						var downloadLink = client.GetDownloadLink(uploadedNode).ToString();
+						var downloadLink = await client.GetDownloadLinkAsync(uploadedNode);
 
-						placeholderValues["mega_link"] = downloadLink;
+						placeholderValues["mega_link"] = downloadLink.ToString();
 					}
 
-					var description = ReplacePlaceholders(Config.Discord.EmbedDescription, placeholderValues);
-
-					var webhookData = new
+					// Load and process the payload template
+					string payloadTemplatePath = Path.Combine(ModuleDirectory, "payload.json");
+					if (!File.Exists(payloadTemplatePath))
 					{
-						username = Config.Discord.WebhookName,
-						avatar_url = Config.Discord.WebhookAvatar,
-						content = ReplacePlaceholders(Config.Discord.MessageText, placeholderValues),
-						embeds = new[]
+						Logger.LogError($"Payload template not found at: {payloadTemplatePath}");
+						return;
+					}
+
+					string payloadTemplate = await File.ReadAllTextAsync(payloadTemplatePath);
+					string payloadJson = ReplacePlaceholders(payloadTemplate, placeholderValues);
+
+					using var httpClient = new HttpClient();
+					MultipartFormDataContent content = new MultipartFormDataContent();
+
+					// Add the JSON payload
+					content.Add(new StringContent(payloadJson, Encoding.UTF8, "application/json"), "payload_json");
+
+					// Check file size and handle upload
+					if (File.Exists(zipPath))
+					{
+						long fileSizeInBytes = new FileInfo(zipPath).Length;
+						long fileSizeInMB = fileSizeInBytes / (1024 * 1024);
+
+						if (fileSizeInMB > 25)
 						{
-							new
+							Logger.LogWarning($"Zip file size ({fileSizeInMB}MB) exceeds Discord's 25MB limit. File will not be uploaded to Discord.");
+							placeholderValues["file_size_warning"] = $"⚠️ File size ({fileSizeInMB}MB) exceeds Discord's limit. Use Mega or FTP links to download.";
+
+							// Suggest enabling Mega or FTP if not already enabled
+							if (!Config.Mega.Enabled && !Config.Ftp.Enabled)
 							{
-								title = ReplacePlaceholders(Config.Discord.EmbedTitle, placeholderValues) ,
-								description= ReplacePlaceholders(description, placeholderValues),
-								color = Config.Discord.EmbedColor
+								Logger.LogWarning("Consider enabling Mega or FTP upload for large files in the configuration.");
 							}
+
+							// Regenerate payload JSON with updated placeholders
+							payloadJson = ReplacePlaceholders(payloadTemplate, placeholderValues);
+							content = new MultipartFormDataContent
+							{
+								{ new StringContent(payloadJson, Encoding.UTF8, "application/json"), "payload_json" }
+							};
 						}
-					};
-
-					using (var httpClient = new HttpClient())
-					using (var content = new MultipartFormDataContent())
-					{
-						content.Add(new StringContent(JsonSerializer.Serialize(webhookData), Encoding.UTF8, "application/json"), "payload_json");
-						if (Config.Discord.WebhookUploadFile)
+						else if (Config.Discord.WebhookUploadFile)
 						{
-							content.Add(new ByteArrayContent(File.ReadAllBytes(zipPath)), "file", $"{fileName}.zip");
+							content.Add(new ByteArrayContent(await File.ReadAllBytesAsync(zipPath)), "file", $"{fileName}.zip");
 						}
-
-						var response = await httpClient.PostAsync(Config.Discord.WebhookURL, content);
-						response.EnsureSuccessStatusCode();
-
-						Server.NextWorldUpdate(() =>
-						{
-							if (Config.General.LogUploads)
-								base.Logger.LogInformation($"Demo uploaded successfully: {fileName}");
-
-							if (Config.General.DeleteDemoAfterUpload)
-								DeleteFile(demoPath);
-
-							if (Config.General.DeleteZippedDemoAfterUpload)
-								DeleteFile(zipPath);
-						});
 					}
-				}
-				catch (Exception ex)
-				{
-					Server.NextWorldUpdate(() => base.Logger.LogError($"Error processing demo: {ex.Message}"));
-				}
-			});
+					else
+					{
+						Logger.LogWarning($"Zip file not found for upload: {zipPath}");
+					}
+
+					// Send the webhook
+					var response = await httpClient.PostAsync(Config.Discord.WebhookURL, content);
+					response.EnsureSuccessStatusCode();
+
+					if (Config.General.LogUploads)
+						Logger.LogInformation($"Demo information uploaded successfully: {fileName}");
+
+					// Clean up files if configured
+					if (Config.General.DeleteDemoAfterUpload)
+						await DeleteFileAsync(demoPath);
+
+					if (Config.General.DeleteZippedDemoAfterUpload)
+						await DeleteFileAsync(zipPath);
+				});
+			}
+			catch (HttpRequestException ex)
+			{
+				Logger.LogError($"Error uploading to Discord: {ex.Message}");
+			}
+			catch (Exception ex)
+			{
+				Logger.LogError($"Unexpected error in ProcessUpload: {ex.Message}");
+			}
 		}
 
-		public string ReplacePlaceholders(string input, Dictionary<string, string> placeholders)
+		private async Task<string> UploadToFtp(string filePath, string remoteFilePath)
+		{
+			using (var client = new AsyncFtpClient(Config.Ftp.Host, Config.Ftp.Username, Config.Ftp.Password, Config.Ftp.Port))
+			{
+				try
+				{
+					client.Config.EncryptionMode = Config.Ftp.UseSftp ? FtpEncryptionMode.Implicit : FtpEncryptionMode.None;
+					client.Config.ValidateAnyCertificate = true;
+
+					await client.AutoConnect();
+
+					await client.UploadFile(filePath, remoteFilePath);
+
+					// Generate a download link
+					string protocol = Config.Ftp.UseSftp ? "sftp" : "ftp";
+					string ftpLink = $"{protocol}://{Config.Ftp.Host}/{remoteFilePath}";
+					return ftpLink;
+				}
+				catch (FtpException ex)
+				{
+					Logger.LogError($"FTP upload error: {ex.Message}");
+					throw;
+				}
+				finally
+				{
+					await client.Disconnect();
+				}
+			}
+		}
+
+		public static string ReplacePlaceholders(string input, Dictionary<string, string> placeholders)
 		{
 			foreach (var placeholder in placeholders)
 			{
@@ -401,23 +533,53 @@ namespace K4ryuuCS2GOTVDiscord
 			return input;
 		}
 
-		public void DeleteFile(string path)
+		private async Task DeleteFileAsync(string path)
 		{
-			Task.Run(() =>
+			if (!File.Exists(path))
 			{
-				while (IsFileLocked(path))
-					Thread.Sleep(1000);
+				Logger.LogWarning($"File not found for deletion: {path}");
+				return;
+			}
 
+			int retryCount = 0;
+			const int maxRetries = 3;
+			const int retryDelayMs = 1000;
+
+			while (retryCount < maxRetries)
+			{
 				try
 				{
-					if (File.Exists(path))
-						File.Delete(path);
+					await Task.Run(() => File.Delete(path));
+
+					if (Config.General.LogDeletions)
+						Logger.LogInformation($"File deleted successfully: {path}");
+					return;
+				}
+				catch (IOException ex) when (IsFileLocked(ex))
+				{
+					retryCount++;
+					if (retryCount < maxRetries)
+					{
+						Logger.LogWarning($"File is locked, retrying in {retryDelayMs}ms: {path}");
+						await Task.Delay(retryDelayMs);
+					}
+					else
+					{
+						Logger.LogError($"Failed to delete file after {maxRetries} attempts due to file lock: {path}");
+					}
 				}
 				catch (Exception ex)
 				{
-					Logger.LogError($"An error occurred while deleting a demo file: {ex.Message}");
+					Logger.LogError($"Error deleting file {path}: {ex.Message}");
+					return;
 				}
-			});
+			}
+		}
+
+		private bool IsFileLocked(IOException exception)
+		{
+			int errorCode = Marshal.GetHRForException(exception) & ((1 << 16) - 1);
+			return errorCode == 32 || errorCode == 33;
 		}
 
 		public void ResetVariables()
@@ -425,6 +587,22 @@ namespace K4ryuuCS2GOTVDiscord
 			DemoRequestedThisRound = false;
 			DemoStartTime = 0.0;
 			fileName = null;
+		}
+
+		private string ReplacePlaceholdersForFileName(string pattern, string baseFileName)
+		{
+			var placeholders = new Dictionary<string, string>
+			{
+				{ "fileName", baseFileName },
+				{ "map", Server.MapName },
+				{ "date", DateTime.Now.ToString("yyyy-MM-dd") },
+				{ "time", DateTime.Now.ToString("HH-mm-ss") },
+				{ "timestamp", DateTime.Now.ToString("yyyyMMdd_HHmmss") },
+				{ "round", (GameRules()?.GameRules?.TotalRoundsPlayed + 1)?.ToString() ?? "Unknown" },
+				{ "playerCount", GetPlayerCount().ToString() },
+			};
+
+			return ReplacePlaceholders(pattern, placeholders);
 		}
 
 		public void Command_DemoRequest(CCSPlayerController? player, CommandInfo info)
@@ -463,17 +641,23 @@ namespace K4ryuuCS2GOTVDiscord
 			if (config.AutoRecord.StopOnIdle && config.AutoRecord.IdleTimeSeconds <= 0)
 				base.Logger.LogWarning("AutoRecord.IdleTimeSeconds must be greater than 0 when AutoRecord.StopOnIdle is enabled.");
 
+			if (config.Ftp.Enabled)
+			{
+				if (string.IsNullOrEmpty(config.Ftp.Host))
+					base.Logger.LogWarning("FTP.Host is not set. FTP uploads will not function without a valid host.");
+				if (string.IsNullOrEmpty(config.Ftp.Username) || string.IsNullOrEmpty(config.Ftp.Password))
+					base.Logger.LogWarning("FTP credentials are not set. FTP uploads may fail without valid credentials.");
+			}
+
 			this.Config = config;
 		}
 
-		public bool IsFileLocked(string filePath)
+		public static bool IsFileLocked(string filePath)
 		{
 			try
 			{
-				using (FileStream stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.None))
-				{
-					stream.Close();
-				}
+				using FileStream stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.None);
+				stream.Close();
 			}
 			catch (IOException)
 			{
@@ -483,9 +667,14 @@ namespace K4ryuuCS2GOTVDiscord
 			return false;
 		}
 
-		public int GetPlayerCount()
+		public static int GetPlayerCount()
 		{
-			return Utilities.GetPlayers().Count(p => p?.IsValid == true && !p.IsBot && !p.IsHLTV && p.Connected == PlayerConnectedState.PlayerConnected);
+			return Utilities.GetPlayers().Count(p => p?.IsValid == true && !p.IsBot && !p.IsHLTV);
+		}
+
+		public static CCSGameRulesProxy? GameRules()
+		{
+			return Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
 		}
 	}
 }

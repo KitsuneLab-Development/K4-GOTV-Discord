@@ -16,9 +16,11 @@
       <ExcludeAssets>runtime</ExcludeAssets>
       <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="MegaApiClient" Version="1.10.4" />
+    <PackageReference Include="FluentFTP" Version="*" />
+    <PackageReference Include="MegaApiClient" Version="*" />
   </ItemGroup>
   <ItemGroup>
     <None Update="lang\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="payload.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

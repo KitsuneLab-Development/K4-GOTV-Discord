@@ -1,0 +1,62 @@
+{
+  "username": "{webhook_name}",
+  "avatar_url": "{webhook_avatar}",
+  "content": "{message_text}",
+  "embeds": [
+    {
+      "title": "{embed_title}",
+      "color": 3447003,
+      "fields": [
+        {
+          "name": "🗺️ Map",
+          "value": "{map}",
+          "inline": true
+        },
+        {
+          "name": "🕒 Duration",
+          "value": "{length}",
+          "inline": true
+        },
+        {
+          "name": "🔢 Final Round",
+          "value": "{round}",
+          "inline": true
+        },
+        {
+          "name": "👥 Players",
+          "value": "{player_count}",
+          "inline": true
+        },
+        {
+          "name": "📅 Recording Date",
+          "value": "{date}",
+          "inline": true
+        },
+        {
+          "name": "⏰ Recording Time",
+          "value": "{time}",
+          "inline": true
+        },
+        {
+          "name": "💾 Demo Files",
+          "value": "📁 Original: {fileName}.dem\n🗜️ Compressed: {fileName}.zip",
+          "inline": false
+        },
+        {
+          "name": "🔗 Download Links",
+          "value": "☁️ Mega: {mega_link}\n📡 FTP: {ftp_link}",
+          "inline": false
+        },
+        {
+          "name": "👤 Requesters ({requester_count})",
+          "value": "Names: {requester_name}\nSteam IDs: {requester_steamid}\n\nDetailed:\n{requester_both}",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "🖥️ Server: {server_name}"
+      },
+      "timestamp": "{iso_timestamp}"
+    }
+  ]
+}

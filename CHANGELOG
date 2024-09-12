@@ -1,3 +1,22 @@
+-- 2024.09.12 - v1.3.0
+
+- feat: Added customisable payload to Discord hook
+- feat: Added SFTP support
+- feat: Added FTP support
+- feat: Added customizable file naming patterns
+- feat: Added customizable default file name config
+- feat: Added Discord upload limit detection
+- feat: Added player join detection to start recording
+- feat: Added placeholders to FTP directory to group by date or anything else
+- fix: Added double trigger block
+- fix: **Plugin broke other plugins due to thread sleep**
+- fix: File deletions not working properly
+- fix: Auto record didnt start within some cases
+- fix: Delayed uploads didnt remove processed files from the list
+- fix: Added safety measurements to not to throttle thread with infinite sleep
+- optimise: All IO based operation made to use threaded contexts
+- remove: Upload delayers due to we handle them in new thread now
+
 -- 2024.05.15 - v1.2.8
 
 - fix: Possibly resolved the issue that breaks other plugins
