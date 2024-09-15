@@ -1,3 +1,8 @@
+-- 2024.09.12 - v1.3.1
+
+- fix: Demo file was used while trying to upload it, added a wait for the file to be ready
+- upgrade: File lock detection in delete and process, and wait for the file to be ready
+
 -- 2024.09.12 - v1.3.0
 
 - feat: Added customisable payload to Discord hook

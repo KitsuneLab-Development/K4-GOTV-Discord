@@ -10,7 +10,6 @@ using System.IO.Compression;
 using CG.Web.MegaApiClient;
 using FluentFTP.Exceptions;
 using CounterStrikeSharp.API.Modules.Cvars;
-using System.Runtime.InteropServices;
 
 namespace K4ryuuCS2GOTVDiscord
 {
@@ -157,7 +156,7 @@ namespace K4ryuuCS2GOTVDiscord
 	public class CS2GOTVDiscordPlugin : BasePlugin, IPluginConfig<PluginConfig>
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.3.0";
+		public override string ModuleVersion => "1.3.1";
 		public override string ModuleAuthor => "K4ryuu @ KitsuneLab";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
@@ -384,10 +383,43 @@ namespace K4ryuuCS2GOTVDiscord
 
 				Task.Run(async () =>
 				{
-					// Zip the demo file
-					using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+					int retryCount = 5; // Maximum number of retries
+					int delayMilliseconds = 2000; // Wait 2 seconds between retries
+
+					bool isFileReady = false;
+					while (retryCount > 0 && !isFileReady)
 					{
-						archive.CreateEntryFromFile(demoPath, Path.GetFileName(demoPath), CompressionLevel.Optimal);
+						try
+						{
+							// Check if the file can be accessed (open and immediately close it)
+							using FileStream fs = new FileStream(demoPath, FileMode.Open, FileAccess.Read, FileShare.None);
+							isFileReady = true;
+						}
+						catch (IOException)
+						{
+							retryCount--;
+
+							// Wait before retrying
+							await Task.Delay(delayMilliseconds);
+						}
+					}
+
+					if (isFileReady)
+					{
+						try
+						{
+							// Now that the file is ready, proceed with zipping it
+							using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
+							archive.CreateEntryFromFile(demoPath, Path.GetFileName(demoPath), CompressionLevel.Fastest);
+						}
+						catch (Exception ex)
+						{
+							Logger.LogError($"An error occurred while zipping the file: {ex.Message}");
+						}
+					}
+					else
+					{
+						Logger.LogError($"Failed to access the file '{demoPath}' after multiple attempts. File is still in use.");
 					}
 
 					// Upload to FTP if enabled
@@ -542,18 +574,19 @@ namespace K4ryuuCS2GOTVDiscord
 			{
 				try
 				{
-					await Task.Run(() => File.Delete(path));
+					using FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+					File.Delete(path);
 
 					if (Config.General.LogDeletions)
 						Logger.LogInformation($"File deleted successfully: {path}");
 					return;
 				}
-				catch (IOException ex) when (IsFileLocked(ex))
+				catch (IOException)
 				{
 					retryCount++;
+
 					if (retryCount < maxRetries)
 					{
-						Logger.LogWarning($"File is locked, retrying in {retryDelayMs}ms: {path}");
 						await Task.Delay(retryDelayMs);
 					}
 					else
@@ -567,12 +600,6 @@ namespace K4ryuuCS2GOTVDiscord
 					return;
 				}
 			}
-		}
-
-		private bool IsFileLocked(IOException exception)
-		{
-			int errorCode = Marshal.GetHRForException(exception) & ((1 << 16) - 1);
-			return errorCode == 32 || errorCode == 33;
 		}
 
 		public void ResetVariables()
