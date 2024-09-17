@@ -1,3 +1,7 @@
+-- 2024.09.17 - v1.3.2
+
+- fix: Crash with workhop map changes due to missing listeners (by @originalaidn)
+
 -- 2024.09.12 - v1.3.1
 
 - fix: Demo file was used while trying to upload it, added a better solution to prevent it
