@@ -175,6 +175,8 @@ namespace K4ryuuCS2GOTVDiscord
 			AddCommandListener("tv_stoprecord", CommandListener_StopRecord);
 			AddCommandListener("changelevel", CommandListener_Changelevel, HookMode.Pre);
 			AddCommandListener("map", CommandListener_Changelevel, HookMode.Pre);
+			AddCommandListener("host_workshop_map", CommandListener_Changelevel, HookMode.Pre);
+			AddCommandListener("ds_workshop_changelevel", CommandListener_Changelevel, HookMode.Pre);
 
 			RegisterEventHandler((EventCsWinPanelMatch @event, GameEventInfo info) =>
 			{
