@@ -1,3 +1,8 @@
+-- 2024.10.15 - v1.3.3 - @originalaidn patch
+
+- feat: Added option to set the Discord server's boost level to increase the file size limit automatically to it
+- feat: Delete every .dem and .zip files from discord_demos folder after server start
+
 -- 2024.09.17 - v1.3.2
 
 - fix: Crash with workhop map changes due to missing listeners (by @originalaidn)
