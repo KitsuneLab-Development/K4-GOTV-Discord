@@ -34,7 +34,7 @@ namespace K4ryuuCS2GOTVDiscord
 		public FtpSettings Ftp { get; set; } = new FtpSettings();
 
 		[JsonPropertyName("ConfigVersion")]
-		public override int Version { get; set; } = 9;
+		public override int Version { get; set; } = 10;
 
 		public class GeneralSettings
 		{
@@ -46,6 +46,9 @@ namespace K4ryuuCS2GOTVDiscord
 
 			[JsonPropertyName("delete-zipped-demo-after-upload")]
 			public bool DeleteZippedDemoAfterUpload { get; set; } = true;
+
+			[JsonPropertyName("delete-every-demo-from-server-after-server-start")]
+			public bool DeleteEveryDemoFromServerAfterServerStart { get; set; } = false;
 
 			[JsonPropertyName("log-uploads")]
 			public bool LogUploads { get; set; } = true;
@@ -83,6 +86,9 @@ namespace K4ryuuCS2GOTVDiscord
 
 			[JsonPropertyName("message-text")]
 			public string MessageText { get; set; } = "@everyone New CSGO Demo Available!";
+
+			[JsonPropertyName("server-boost")]
+			public int ServerBoost { get; set; } = 0;
 		}
 
 		public class AutoRecordSettings
@@ -152,11 +158,11 @@ namespace K4ryuuCS2GOTVDiscord
 		}
 	}
 
-	[MinimumApiVersion(250)]
+	[MinimumApiVersion(276)]
 	public class CS2GOTVDiscordPlugin : BasePlugin, IPluginConfig<PluginConfig>
 	{
 		public override string ModuleName => "CS2 GOTV Discord";
-		public override string ModuleVersion => "1.3.2";
+		public override string ModuleVersion => "1.3.3";
 		public override string ModuleAuthor => "K4ryuu @ KitsuneLab";
 
 		public required PluginConfig Config { get; set; } = new PluginConfig();
@@ -168,6 +174,7 @@ namespace K4ryuuCS2GOTVDiscord
 		public double DemoStartTime = 0.0;
 		public bool IsPluginExecution = false;
 		public bool PluginRecording = false;
+		public int maxFileSizeInMB = 25;
 
 		public override void Load(bool hotReload)
 		{
@@ -247,11 +254,31 @@ namespace K4ryuuCS2GOTVDiscord
 
 			if (Config.AutoRecord.Enabled && hotReload)
 				Server.ExecuteCommand("tv_record \"autodemo\"");
+
+			maxFileSizeInMB = (Config.Discord.ServerBoost == 2) ? 50 : (Config.Discord.ServerBoost == 3) ? 100 : 25;
 		}
 
 		public override void Unload(bool hotReload)
 		{
 			Server.ExecuteCommand("tv_stoprecord");
+		}
+
+		public override async void OnAllPluginsLoaded(bool isReload)
+		{
+			if (Config.General.DeleteEveryDemoFromServerAfterServerStart)
+			{
+				string directoryPath = Path.Combine(Server.GameDirectory, "csgo", "discord_demos");
+
+				string[] demoFiles = Directory.GetFiles(directoryPath, "*.dem");
+				string[] zipFiles = Directory.GetFiles(directoryPath, "*.zip");
+
+				string[] allFiles = demoFiles.Concat(zipFiles).ToArray();
+
+				foreach (var file in allFiles)
+				{
+					await DeleteFileAsync(file);
+				}
+			}
 		}
 
 		private HookResult CommandListener_Changelevel(CCSPlayerController? player, CommandInfo info)
@@ -467,10 +494,10 @@ namespace K4ryuuCS2GOTVDiscord
 						long fileSizeInBytes = new FileInfo(zipPath).Length;
 						long fileSizeInMB = fileSizeInBytes / (1024 * 1024);
 
-						if (fileSizeInMB > 25)
+						if (fileSizeInMB > maxFileSizeInMB)
 						{
-							Logger.LogWarning($"Zip file size ({fileSizeInMB}MB) exceeds Discord's 25MB limit. File will not be uploaded to Discord.");
-							placeholderValues["file_size_warning"] = $"⚠️ File size ({fileSizeInMB}MB) exceeds Discord's limit. Use Mega or FTP links to download.";
+							Logger.LogWarning($"Zip file size ({fileSizeInMB}MB) exceeds Discord's {maxFileSizeInMB}MB limit. File will not be uploaded to Discord.");
+							placeholderValues["file_size_warning"] = $"⚠️ File size ({fileSizeInMB}MB) exceeds Discord's ({maxFileSizeInMB}MB) limit. Use Mega or FTP links to download.";
 
 							// Suggest enabling Mega or FTP if not already enabled
 							if (!Config.Mega.Enabled && !Config.Ftp.Enabled)
