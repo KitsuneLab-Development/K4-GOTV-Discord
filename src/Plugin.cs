@@ -528,12 +528,12 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 				var node = nodes.SingleOrDefault(n => n.Id.ToString() == r.Identifier);
 
 				if (node != null)
-					await client.DeleteAsync(node);
+					await client.DeleteAsync(node, moveToTrash: false);
 
 				toRemove.Add(r);
 
 				if (Config.General.LogDeletions)
-					Logger.LogInformation($"Deleted Mega node {r.Identifier} due to retention policy.");
+					Logger.LogInformation($"Permanently deleted Mega node {r.Identifier} due to retention policy.");
 			}
 			catch (Exception ex)
 			{
