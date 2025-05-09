@@ -1,6 +1,7 @@
 using Dapper;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
+using static K4GOTV.Plugin;
 
 namespace K4GOTV;
 
@@ -28,6 +29,11 @@ public class DatabaseService
 
 		_connectionString = builder.ConnectionString;
 		_logger = logger;
+
+		CSSThread.RunOnMainThread(async () =>
+		{
+			await this.CreateTableIfNotExistsAsync();
+		});
 	}
 
 	public async Task StoreDemoRecordAsync(Dictionary<string, string> placeholders)
