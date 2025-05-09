@@ -113,9 +113,6 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
 		maxFileSizeInMB = (Config.Discord.ServerBoost == 2) ? 50 : (Config.Discord.ServerBoost == 3) ? 100 : 25;
 		uploadService = new UploadService(Config, Logger);
-
-		if (Config.Database.Enable)
-			databaseService = new DatabaseService(Config.Database, Logger);
 	}
 
 	public override void Unload(bool hotReload)
@@ -412,6 +409,9 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
 		if (config.AutoRecord.StopOnIdle && config.AutoRecord.IdleTimeSeconds <= 0)
 			Logger.LogWarning("AutoRecord.IdleTimeSeconds must be greater than 0 when StopOnIdle is enabled.");
+
+		if (Config.Database.Enable)
+			databaseService = new DatabaseService(config.Database, Logger);
 
 		this.Config = config;
 	}
