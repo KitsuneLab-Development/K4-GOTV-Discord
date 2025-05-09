@@ -334,7 +334,11 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 	private static string ReplacePlaceholders(string input, Dictionary<string, string> placeholders)
 	{
 		foreach (var kv in placeholders)
-			input = input.Replace($"{{{kv.Key}}}", kv.Value);
+		{
+			// Replace newlines in placeholder values with escaped newlines for Discord JSON
+			string value = kv.Value.Replace("\r\n", "\\n").Replace("\n", "\\n");
+			input = input.Replace($"{{{kv.Key}}}", value);
+		}
 
 		return input;
 	}
