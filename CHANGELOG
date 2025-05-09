@@ -1,3 +1,8 @@
+-- 2025.05.09 - v2.1.1
+
+fix: Database initialization didnt succeed
+chore: Block Mega files from getting into trash as it waste the space there
+
 -- 2025.05.09 - v2.1.0
 
 - feat: Added support for line breaks in payload
