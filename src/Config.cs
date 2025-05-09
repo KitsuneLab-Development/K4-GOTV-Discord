@@ -26,7 +26,7 @@ public sealed class PluginConfig : BasePluginConfig
 	public DatabaseSettings Database { get; set; } = new DatabaseSettings();
 
 	[JsonPropertyName("ConfigVersion")]
-	public override int Version { get; set; } = 10;
+	public override int Version { get; set; } = 11;
 
 	public class GeneralSettings
 	{
@@ -59,6 +59,15 @@ public sealed class PluginConfig : BasePluginConfig
 
 		[JsonPropertyName("demo-directory")]
 		public string DemoDirectory { get; set; } = "discord_demos";
+
+		[JsonPropertyName("auto-cleanup-enabled")]
+		public bool AutoCleanupEnabled { get; set; } = false;
+
+		[JsonPropertyName("auto-cleanup-interval-minutes")]
+		public int AutoCleanupIntervalMinutes { get; set; } = 60;
+
+		[JsonPropertyName("auto-cleanup-file-age-hours")]
+		public int AutoCleanupFileAgeHours { get; set; } = 48;
 	}
 
 	public class DiscordSettings

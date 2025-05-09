@@ -113,6 +113,20 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
 		maxFileSizeInMB = (Config.Discord.ServerBoost == 2) ? 50 : (Config.Discord.ServerBoost == 3) ? 100 : 25;
 		uploadService = new UploadService(Config, Logger);
+
+		if (Config.General.AutoCleanupEnabled)
+		{
+			AddTimer(Config.General.AutoCleanupIntervalMinutes * 60f, () =>
+			{
+				var cutoff = DateTime.Now.AddHours(-Config.General.AutoCleanupFileAgeHours);
+				var files = Directory.GetFiles(DemoDirectory, "*.dem").Concat(Directory.GetFiles(DemoDirectory, "*.zip"));
+				foreach (var file in files)
+				{
+					if (File.GetCreationTime(file) < cutoff)
+						CSSThread.RunOnMainThread(async () => await FileManager.DeleteFileAsync(file, Logger, Config.General.LogDeletions));
+				}
+			}, TimerFlags.REPEAT);
+		}
 	}
 
 	public override void Unload(bool hotReload)
@@ -131,9 +145,6 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 				foreach (var file in allFiles)
 					await FileManager.DeleteFileAsync(file, Logger, Config.General.LogDeletions);
 			}
-
-			if (databaseService != null)
-				await databaseService.CreateTableIfNotExistsAsync();
 		});
 	}
 
