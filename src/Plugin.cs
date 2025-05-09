@@ -442,7 +442,7 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 		if (config.AutoRecord.StopOnIdle && config.AutoRecord.IdleTimeSeconds <= 0)
 			Logger.LogWarning("AutoRecord.IdleTimeSeconds must be greater than 0 when StopOnIdle is enabled.");
 
-		if (Config.Database.Enable)
+		if (config.Database.Enable)
 			databaseService = new DatabaseService(config.Database, Logger);
 
 		this.Config = config;
@@ -451,7 +451,8 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 	private List<UploadRetentionRecord> LoadRetentionRecords()
 	{
 		if (!File.Exists(RetentionFilePath))
-			return new List<UploadRetentionRecord>();
+			return [];
+
 		var json = File.ReadAllText(RetentionFilePath);
 		return JsonSerializer.Deserialize<List<UploadRetentionRecord>>(json) ?? new List<UploadRetentionRecord>();
 	}
