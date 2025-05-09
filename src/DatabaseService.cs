@@ -68,11 +68,11 @@ public class DatabaseService
 				fileSizeInKB = int.Parse(placeholders["fileSizeInKB"])
 			});
 
-			_logger.LogInformation("Rögzítve a demo URL az adatbázisban.");
+			_logger.LogInformation("Demo URL successfully recorded in the database.");
 		}
 		catch (Exception ex)
 		{
-			_logger.LogError($"Adatbázisba írás sikertelen: {ex.Message}");
+			_logger.LogError($"Failed to write to database: {ex.Message}");
 		}
 	}
 
@@ -115,7 +115,7 @@ public class DatabaseService
 		}
 		catch (Exception ex)
 		{
-			_logger.LogError($"Táblalétrehozás sikertelen: {ex.Message}");
+			_logger.LogError($"Failed to create table: {ex.Message}");
 		}
 	}
 }
