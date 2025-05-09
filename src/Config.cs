@@ -125,6 +125,12 @@ public sealed class PluginConfig : BasePluginConfig
 
 		[JsonPropertyName("password")]
 		public string Password { get; set; } = "";
+
+		[JsonPropertyName("retention-enabled")]
+		public bool RetentionEnabled { get; set; } = false;
+
+		[JsonPropertyName("retention-hours")]
+		public int RetentionHours { get; set; } = 72;
 	}
 
 	public class DemoRequestSettings
@@ -161,6 +167,12 @@ public sealed class PluginConfig : BasePluginConfig
 
 		[JsonPropertyName("use-sftp")]
 		public bool UseSftp { get; set; } = false;
+
+		[JsonPropertyName("retention-enabled")]
+		public bool RetentionEnabled { get; set; } = false;
+
+		[JsonPropertyName("retention-hours")]
+		public int RetentionHours { get; set; } = 72;
 	}
 
 	public class DatabaseSettings

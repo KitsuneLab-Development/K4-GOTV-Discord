@@ -1,4 +1,9 @@
 using System.Text;
+using System.Text.Json;
+using System.Linq;
+using CG.Web.MegaApiClient;
+using FluentFTP;
+using FluentFTP.Exceptions;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
@@ -28,6 +33,8 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 	private string DemoDirectory => Path.Combine(Server.GameDirectory, "csgo", Config.General.DemoDirectory);
 	private UploadService? uploadService;
 	private DatabaseService? databaseService;
+	private string RetentionFilePath => Path.Combine(ModuleDirectory, "uploads_retention.json");
+	private record UploadRetentionRecord(string Service, string Identifier, DateTime UploadedAt);
 
 	public override void Load(bool hotReload)
 	{
@@ -126,6 +133,16 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 						CSSThread.RunOnMainThread(async () => await FileManager.DeleteFileAsync(file, Logger, Config.General.LogDeletions));
 				}
 			}, TimerFlags.REPEAT);
+		}
+
+		if (Config.Ftp.RetentionEnabled)
+		{
+			AddTimer(3600f, () => CSSThread.RunOnMainThread(async () => await CleanFtpRetention()), TimerFlags.REPEAT);
+		}
+
+		if (Config.Mega.RetentionEnabled)
+		{
+			AddTimer(3600f, () => CSSThread.RunOnMainThread(async () => await CleanMegaRetention()), TimerFlags.REPEAT);
 		}
 	}
 
@@ -263,12 +280,16 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 					string remoteFilePath = ReplacePlaceholdersForFileName(Path.Combine(Config.Ftp.RemoteDirectory, Path.GetFileName(zipPath)).Replace("\\", "/"), Path.GetFileName(zipPath));
 					string ftpLink = await uploadService.UploadToFtpAsync(zipPath, remoteFilePath);
 					placeholders["ftp_link"] = ftpLink;
+					if (Config.Ftp.RetentionEnabled)
+						AppendRetentionRecord("ftp", remoteFilePath);
 				}
 
 				if (Config.Mega.Enabled && !string.IsNullOrEmpty(Config.Mega.Email) && !string.IsNullOrEmpty(Config.Mega.Password) && uploadService != null)
 				{
-					string megaLink = await uploadService.UploadToMegaAsync(zipPath);
+					var (megaLink, megaNodeId) = await uploadService.UploadToMegaAsync(zipPath);
 					placeholders["mega_link"] = megaLink;
+					if (Config.Mega.RetentionEnabled && !string.IsNullOrEmpty(megaNodeId))
+						AppendRetentionRecord("mega", megaNodeId);
 				}
 
 				string payloadTemplatePath = Path.Combine(ModuleDirectory, "payload.json");
@@ -425,6 +446,102 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 			databaseService = new DatabaseService(config.Database, Logger);
 
 		this.Config = config;
+	}
+
+	private List<UploadRetentionRecord> LoadRetentionRecords()
+	{
+		if (!File.Exists(RetentionFilePath))
+			return new List<UploadRetentionRecord>();
+		var json = File.ReadAllText(RetentionFilePath);
+		return JsonSerializer.Deserialize<List<UploadRetentionRecord>>(json) ?? new List<UploadRetentionRecord>();
+	}
+
+	private void SaveRetentionRecords(List<UploadRetentionRecord> records)
+	{
+		var json = JsonSerializer.Serialize(records);
+		File.WriteAllText(RetentionFilePath, json);
+	}
+
+	private void AppendRetentionRecord(string service, string identifier)
+	{
+		var records = LoadRetentionRecords();
+		records.Add(new UploadRetentionRecord(service, identifier, DateTime.Now));
+		SaveRetentionRecords(records);
+	}
+
+	private async Task CleanFtpRetention()
+	{
+		var records = LoadRetentionRecords();
+		var currentTime = DateTime.Now;
+		var recordsToRemove = new List<UploadRetentionRecord>();
+
+		using var ftpClient = new AsyncFtpClient(Config.Ftp.Host, Config.Ftp.Username, Config.Ftp.Password, Config.Ftp.Port);
+
+		ftpClient.Config.EncryptionMode = Config.Ftp.UseSftp ? FtpEncryptionMode.Implicit : FtpEncryptionMode.None;
+		ftpClient.Config.ValidateAnyCertificate = true;
+
+		await ftpClient.AutoConnect();
+
+		var expiredRecords = records.Where(r => r.Service == "ftp" && (currentTime - r.UploadedAt).TotalHours >= Config.Ftp.RetentionHours);
+
+		foreach (var record in expiredRecords)
+		{
+			try
+			{
+				await ftpClient.DeleteFile(record.Identifier);
+				recordsToRemove.Add(record);
+
+				if (Config.General.LogDeletions)
+					Logger.LogInformation($"Deleted FTP file {record.Identifier} due to retention policy.");
+			}
+			catch (Exception ex)
+			{
+				Logger.LogError($"Error deleting FTP file {record.Identifier}: {ex.Message}");
+			}
+		}
+
+		await ftpClient.Disconnect();
+
+		if (recordsToRemove.Count != 0)
+		{
+			SaveRetentionRecords(records.Except(recordsToRemove).ToList());
+		}
+	}
+
+	private async Task CleanMegaRetention()
+	{
+		var records = LoadRetentionRecords();
+		var now = DateTime.Now;
+		var toRemove = new List<UploadRetentionRecord>();
+		var client = new MegaApiClient();
+
+		await client.LoginAsync(Config.Mega.Email, Config.Mega.Password);
+
+		var expiredRecords = records.Where(r => r.Service == "mega" && (now - r.UploadedAt).TotalHours >= Config.Mega.RetentionHours);
+
+		foreach (var r in expiredRecords)
+		{
+			try
+			{
+				var nodes = await client.GetNodesAsync();
+				var node = nodes.SingleOrDefault(n => n.Id.ToString() == r.Identifier);
+
+				if (node != null)
+					await client.DeleteAsync(node);
+
+				toRemove.Add(r);
+
+				if (Config.General.LogDeletions)
+					Logger.LogInformation($"Deleted Mega node {r.Identifier} due to retention policy.");
+			}
+			catch (Exception ex)
+			{
+				Logger.LogError($"Error deleting Mega node {r.Identifier}: {ex.Message}");
+			}
+		}
+
+		if (toRemove.Count != 0)
+			SaveRetentionRecords(records.Except(toRemove).ToList());
 	}
 
 	public static int PlayerCount()

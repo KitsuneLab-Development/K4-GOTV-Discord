@@ -39,7 +39,7 @@ public class UploadService
 		}
 	}
 
-	public async Task<string> UploadToMegaAsync(string filePath)
+	public async Task<(string Link, string NodeId)> UploadToMegaAsync(string filePath)
 	{
 		try
 		{
@@ -48,12 +48,12 @@ public class UploadService
 			var rootNode = (await client.GetNodesAsync()).Single(x => x.Type == NodeType.Root);
 			var uploadedNode = await client.UploadFileAsync(filePath, rootNode);
 			var downloadLink = await client.GetDownloadLinkAsync(uploadedNode);
-			return downloadLink.ToString();
+			return (downloadLink.ToString(), uploadedNode.Id.ToString());
 		}
 		catch (Exception ex)
 		{
 			_logger.LogError($"Mega upload error: {ex.Message}");
-			return "Not uploaded to Mega.";
+			return ("Not uploaded to Mega.", string.Empty);
 		}
 	}
 }

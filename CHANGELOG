@@ -1,3 +1,10 @@
+-- 2025.05.09 - v2.1.0
+
+- feat: Added support for line breaks in payload
+- feat: Added file auto-cleanup for servers that are running 24/7 and fails many upload due to bad configuration
+- feat: Added optional retention settings to periodically delete old demo files from Mega and FTP
+- fix: Database connection issues
+
 -- 2025.02.02 - v2.0.1
 
 - fix: Non-game thread issue on uploading demo
