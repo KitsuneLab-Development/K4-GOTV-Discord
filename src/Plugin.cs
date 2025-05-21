@@ -17,7 +17,7 @@ public sealed partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 {
 	public override string ModuleName => "K4-GOTV";
 	public override string ModuleDescription => "Advanced GOTV handler with Discord, database, FTP, SFTP and Mega integration";
-	public override string ModuleVersion => "2.1.1";
+	public override string ModuleVersion => "2.1.2";
 	public override string ModuleAuthor => "K4ryuu @ KitsuneLab";
 
 	public required PluginConfig Config { get; set; } = new PluginConfig();

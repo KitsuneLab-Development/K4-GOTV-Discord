@@ -1,7 +1,12 @@
+-- 2025.05.21 - v2.1.2
+
+- fix: Improved file deletion to handle locked files more robustly with incremental retry delays
+- fix: Properly close file streams before attempting to delete files
+
 -- 2025.05.09 - v2.1.1
 
-fix: Database initialization didnt succeed
-chore: Block Mega files from getting into trash as it waste the space there
+- fix: Database initialization didnt succeed
+- chore: Block Mega files from getting into trash as it waste the space there
 
 -- 2025.05.09 - v2.1.0
 

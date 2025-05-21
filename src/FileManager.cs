@@ -53,15 +53,21 @@ public static class FileManager
 		}
 
 		int retryCount = 0;
-		const int maxRetries = 3;
-		const int retryDelayMs = 1000;
+		const int maxRetries = 10;
 
 		while (retryCount < maxRetries)
 		{
 			try
 			{
-				using FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+				// Try to open the file to check if it's locked
+				using (FileStream fs = new(path, FileMode.Open, FileAccess.Read, FileShare.None))
+				{
+					// File is open, we can close the stream now
+				}
+
+				// Now that we've confirmed the file is accessible and the stream is closed, delete it
 				File.Delete(path);
+
 				if (logDeletion)
 					logger.LogInformation($"File successfully deleted: {path}");
 				return;
@@ -69,10 +75,17 @@ public static class FileManager
 			catch (IOException)
 			{
 				retryCount++;
+
 				if (retryCount < maxRetries)
-					await Task.Delay(retryDelayMs);
+				{
+					// Incremental delay: 1s, 3s, 5s, 7s, 9s, 11s, 13s, 15s, 17s
+					int delayMs = 1000 + (retryCount * 2000);
+					await Task.Delay(delayMs);
+				}
 				else
+				{
 					logger.LogError($"Failed to delete file after {maxRetries} attempts: {path}");
+				}
 			}
 			catch (Exception ex)
 			{
